@@ -1,6 +1,13 @@
 'use client';
 import { useState, useRef } from 'react';
-import { uid, formatHour, PRIORITY_META, PROJECT_COLORS, PROJECT_EMOJIS } from '@/lib/constants';
+import { formatHour, PRIORITY_META, PROJECT_COLORS, PROJECT_EMOJIS } from '@/lib/constants';
+
+const formatSize = (bytes) => {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
 
 function PriorityBadge({ priority }) {
   const p = PRIORITY_META[priority] || PRIORITY_META[5];
@@ -21,7 +28,14 @@ function TaskCard({ task, project }) {
         {task.description && <div className="task-desc">{task.description}</div>}
         {task.attachments?.length > 0 && (
           <div className="task-attachments">
-            {task.attachments.map((a,i) => <span key={i} className="attachment-chip">📎 {a.name}</span>)}
+            {task.attachments.map((a, i) =>
+              a.url
+                ? <a key={i} className="attachment-chip" href={a.url} download={a.name} target="_blank" rel="noopener noreferrer"
+                    style={{ textDecoration:'none', cursor:'pointer' }}>
+                    📎 {a.name}{a.size ? ` · ${formatSize(a.size)}` : ''}
+                  </a>
+                : <span key={i} className="attachment-chip">📎 {a.name}</span>
+            )}
           </div>
         )}
       </div>
@@ -36,19 +50,66 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
   const [title,       setTitle]       = useState('');
   const [desc,        setDesc]        = useState('');
   const [priority,    setPriority]    = useState(3);
-  const [attachments, setAttachments] = useState([]);
+  const [attachments, setAttachments] = useState([]); // { _key, name, url, size, uploading, error }
   const fileRef = useRef(null);
+
+  const handleFiles = async (files) => {
+    const incoming = Array.from(files);
+    // Add placeholders immediately so the user sees progress
+    const placeholders = incoming.map(f => ({
+      _key: `${f.name}-${Date.now()}-${Math.random()}`,
+      name: f.name,
+      uploading: true,
+      error: null,
+    }));
+    setAttachments(prev => [...prev, ...placeholders]);
+
+    await Promise.all(incoming.map(async (file, i) => {
+      const key = placeholders[i]._key;
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res  = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        setAttachments(prev => prev.map(a =>
+          a._key === key ? { _key: key, name: data.name, url: data.url, size: data.size, uploading: false, error: null } : a
+        ));
+      } catch (err) {
+        setAttachments(prev => prev.map(a =>
+          a._key === key ? { ...a, uploading: false, error: err.message } : a
+        ));
+      }
+    }));
+
+    // Reset so the same file can be selected again
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const removeAttachment = async (key) => {
+    const att = attachments.find(a => a._key === key);
+    setAttachments(prev => prev.filter(a => a._key !== key));
+    if (att?.url) {
+      const filename = att.url.split('/').pop();
+      await fetch(`/api/upload/${filename}`, { method: 'DELETE' });
+    }
+  };
 
   const submit = () => {
     if (!title.trim()) return;
-    onAdd({ id: uid(), projectId, title: title.trim(), description: desc.trim(), priority, attachments });
+    const ready = attachments
+      .filter(a => !a.uploading && !a.error && a.url)
+      .map(({ name, url, size }) => ({ name, url, size }));
+    onAdd({ projectId, title: title.trim(), description: desc.trim(), priority, attachments: ready });
     onCancel();
   };
+
+  const uploading = attachments.some(a => a.uploading);
 
   return (
     <div className="task-form animate-in">
       <input autoFocus placeholder="Task title…" value={title} onChange={e=>setTitle(e.target.value)}
-        onKeyDown={e=>{ if(e.key==='Enter') submit(); if(e.key==='Escape') onCancel(); }} />
+        onKeyDown={e=>{ if(e.key==='Enter' && !uploading) submit(); if(e.key==='Escape') onCancel(); }} />
       <textarea placeholder="Description (optional)" value={desc} onChange={e=>setDesc(e.target.value)} />
       <div className="task-form-row">
         {[1,2,3,4,5].map(p => {
@@ -57,17 +118,52 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
             style={priority===p?{background:pm.bg}:{}} onClick={()=>setPriority(p)}>{pm.label}</button>;
         })}
       </div>
+
+      {/* Attachment chips */}
+      {attachments.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:7 }}>
+          {attachments.map(a => (
+            <span key={a._key} style={{
+              display:'inline-flex', alignItems:'center', gap:4,
+              fontSize:11, borderRadius:5, padding:'3px 7px',
+              background: a.error ? '#fef2f2' : a.uploading ? 'var(--bg)' : 'var(--bg)',
+              border: `1px solid ${a.error ? '#fca5a5' : 'var(--border)'}`,
+              color: a.error ? '#ef4444' : 'var(--text-muted)',
+              maxWidth: 180, overflow:'hidden',
+            }}>
+              {a.uploading
+                ? <span style={{ fontSize:10, animation:'spin 1s linear infinite', display:'inline-block' }}>↻</span>
+                : a.error ? '✕' : '📎'}
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
+                {a.error ? a.error : a.name}
+              </span>
+              {a.size && !a.uploading && !a.error && (
+                <span style={{ color:'var(--text-light)', flexShrink:0 }}>{formatSize(a.size)}</span>
+              )}
+              {!a.uploading && (
+                <button onClick={() => removeAttachment(a._key)} style={{
+                  background:'none', border:'none', cursor:'pointer', color:'var(--text-light)',
+                  padding:0, fontSize:13, lineHeight:1, flexShrink:0, display:'flex',
+                }}>×</button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="task-form-row" style={{ marginBottom: 0 }}>
-        <button className="btn-attach" onClick={()=>fileRef.current?.click()}>
+        <button className="btn-attach" onClick={() => fileRef.current?.click()}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9.5 5.5L5.5 9.5a2.5 2.5 0 01-3.5-3.5l4-4A1.5 1.5 0 018 3.5L4 7.5a.5.5 0 01-.7-.7L7 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
           Attach
         </button>
-        <input ref={fileRef} type="file" multiple style={{display:'none'}}
-          onChange={e=>setAttachments(prev=>[...prev,...Array.from(e.target.files||[]).map(f=>({name:f.name}))])} />
-        {attachments.length > 0 && <span style={{fontSize:11,color:'var(--text-muted)'}}>{attachments.length} file{attachments.length!==1?'s':''}</span>}
-        <div style={{flex:1}}/>
+        <input ref={fileRef} type="file" multiple style={{ display:'none' }}
+          onChange={e => handleFiles(e.target.files)} />
+        <div style={{ flex:1 }} />
         <button className="btn-cancel" onClick={onCancel}>Cancel</button>
-        <button className="btn-submit" style={{background:projectColor}} onClick={submit}>Add task</button>
+        <button className="btn-submit" style={{ background: projectColor, opacity: uploading ? 0.6 : 1 }}
+          onClick={submit} disabled={uploading}>
+          {uploading ? 'Uploading…' : 'Add task'}
+        </button>
       </div>
     </div>
   );
@@ -83,7 +179,10 @@ function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask }) {
   return (
     <div className="project-group animate-in">
       <div className="project-header" onClick={()=>setExpanded(e=>!e)}>
-        <div className="project-emoji" style={{background:project.color+'22',color:project.color}}>{project.emoji}</div>
+        {project.iconUrl
+          ? <img src={project.iconUrl} alt="" style={{ width:32, height:32, borderRadius:8, objectFit:'cover', flexShrink:0 }} />
+          : <div className="project-emoji" style={{background:project.color+'22',color:project.color}}>{project.emoji || '◈'}</div>
+        }
         <div className="project-name">{project.name}</div>
         <span className="project-count">{visibleTasks.length}</span>
         <div className={`project-chevron${expanded?' open':''}`}>
@@ -108,32 +207,126 @@ function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask }) {
 }
 
 function CreateProjectForm({ onAdd, onCancel }) {
-  const [name,  setName]  = useState('');
-  const [color, setColor] = useState(PROJECT_COLORS[0]);
-  const [emoji, setEmoji] = useState(PROJECT_EMOJIS[0]);
+  const [name,         setName]         = useState('');
+  const [color,        setColor]        = useState(PROJECT_COLORS[0]);
+  const [emoji,        setEmoji]        = useState(PROJECT_EMOJIS[0]);
+  const [iconMode,     setIconMode]     = useState('emoji'); // 'emoji' | 'image'
+  const [iconUrl,      setIconUrl]      = useState(null);
+  const [iconUploading,setIconUploading]= useState(false);
+  const [iconError,    setIconError]    = useState('');
+  const iconFileRef = useRef(null);
 
-  const submit = () => { if (!name.trim()) return; onAdd({id:uid(),name:name.trim(),color,emoji}); onCancel(); };
+  const handleIconFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIconError('');
+    setIconUploading(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res  = await fetch('/api/upload', { method: 'POST', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      setIconUrl(data.url);
+    } catch (err) {
+      setIconError(err.message);
+    } finally {
+      setIconUploading(false);
+      if (iconFileRef.current) iconFileRef.current.value = '';
+    }
+  };
+
+  const removeIcon = async () => {
+    if (iconUrl) {
+      const filename = iconUrl.split('/').pop();
+      await fetch(`/api/upload/${filename}`, { method: 'DELETE' });
+    }
+    setIconUrl(null);
+    setIconError('');
+  };
+
+  const submit = () => {
+    if (!name.trim() || iconUploading) return;
+    onAdd({
+      name: name.trim(), color, emoji,
+      iconUrl: iconMode === 'image' ? (iconUrl || null) : null,
+    });
+    onCancel();
+  };
 
   return (
     <div className="new-project-form animate-in">
       <h4>New Project</h4>
       <input className="project-name-input" autoFocus placeholder="Project name…" value={name}
         onChange={e=>setName(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submit(); if(e.key==='Escape') onCancel(); }} />
+
       <div className="swatch-label">Color</div>
       <div className="color-swatches">
         {PROJECT_COLORS.map(c => <div key={c} className={`color-swatch${color===c?' selected':''}`} style={{background:c}} onClick={()=>setColor(c)} />)}
       </div>
+
       <div className="swatch-label">Icon</div>
-      <div className="emoji-opts" style={{marginBottom:14}}>
-        {PROJECT_EMOJIS.map(e2 => (
-          <div key={e2} className={`emoji-opt${emoji===e2?' selected':''}`}
-            style={{background:emoji===e2?color+'33':'var(--bg)',color:emoji===e2?color:'var(--text-muted)'}}
-            onClick={()=>setEmoji(e2)}>{e2}</div>
+      {/* Mode toggle */}
+      <div style={{ display:'flex', background:'var(--bg)', borderRadius:8, padding:3, gap:3, marginBottom:12 }}>
+        {['emoji','image'].map(m => (
+          <button key={m} onClick={()=>setIconMode(m)} style={{
+            flex:1, padding:'5px 0', borderRadius:6, border:'none', cursor:'pointer',
+            fontSize:11, fontWeight:600, fontFamily:'inherit', transition:'all .12s',
+            background: iconMode===m ? '#fff' : 'transparent',
+            color: iconMode===m ? 'var(--text)' : 'var(--text-muted)',
+            boxShadow: iconMode===m ? '0 1px 3px rgba(0,0,0,.08)' : 'none',
+          }}>
+            {m === 'emoji' ? 'Symbol' : 'Image'}
+          </button>
         ))}
       </div>
+
+      {iconMode === 'emoji' ? (
+        <div className="emoji-opts" style={{marginBottom:14}}>
+          {PROJECT_EMOJIS.map(e2 => (
+            <div key={e2} className={`emoji-opt${emoji===e2?' selected':''}`}
+              style={{background:emoji===e2?color+'33':'var(--bg)',color:emoji===e2?color:'var(--text-muted)'}}
+              onClick={()=>setEmoji(e2)}>{e2}</div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ marginBottom:14 }}>
+          {iconUrl ? (
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <img src={iconUrl} alt="icon preview" style={{ width:48, height:48, borderRadius:10, objectFit:'cover', border:'1px solid var(--border)' }} />
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:12, color:'var(--text)', fontWeight:500, marginBottom:4 }}>Icon uploaded</div>
+                <button onClick={removeIcon} style={{
+                  fontSize:11, color:'#ef4444', background:'none', border:'none',
+                  cursor:'pointer', padding:0, fontFamily:'inherit',
+                }}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={()=>iconFileRef.current?.click()} disabled={iconUploading} style={{
+              display:'flex', alignItems:'center', justifyContent:'center', gap:7,
+              width:'100%', padding:'28px 0', borderRadius:10,
+              border:'1.5px dashed var(--border)', background:'var(--bg)',
+              cursor: iconUploading ? 'default' : 'pointer', color:'var(--text-muted)',
+              fontSize:13, fontFamily:'inherit', transition:'border-color .15s',
+            }}>
+              {iconUploading
+                ? <><span style={{fontSize:14,animation:'spin 1s linear infinite',display:'inline-block'}}>↻</span> Uploading…</>
+                : <><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 4l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 10v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> Upload image</>
+              }
+            </button>
+          )}
+          <input ref={iconFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleIconFile} />
+          {iconError && <div style={{ fontSize:11, color:'#ef4444', marginTop:6 }}>{iconError}</div>}
+        </div>
+      )}
+
       <div className="form-actions">
         <button className="btn-cancel" onClick={onCancel}>Cancel</button>
-        <button className="btn-submit" style={{background:color}} onClick={submit}>Create Project</button>
+        <button className="btn-submit" style={{ background:color, opacity: iconUploading ? 0.6 : 1 }}
+          onClick={submit} disabled={iconUploading}>
+          Create Project
+        </button>
       </div>
     </div>
   );

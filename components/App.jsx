@@ -2,64 +2,141 @@
 import { useState, useEffect } from 'react';
 import CalendarPanel from './CalendarPanel';
 import TaskPanel from './TaskPanel';
-import { load, today as getToday, getNowHour, INIT_PROJECTS, INIT_TASKS } from '@/lib/constants';
+import LoginPage from './LoginPage';
+import { today as getToday, getNowHour } from '@/lib/constants';
+
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
 
 export default function App() {
-  const [projects, setProjects] = useState(null);
-  const [tasks,    setTasks]    = useState(null);
-  const [entries,  setEntries]  = useState(null);
+  const [user,     setUser]     = useState(undefined); // undefined = loading
+  const [projects, setProjects] = useState([]);
+  const [tasks,    setTasks]    = useState([]);
+  const [entries,  setEntries]  = useState([]);
 
-  // Hydrate from localStorage on client only
+  // Check auth on mount
   useEffect(() => {
-    setProjects(load('ptm_projects', INIT_PROJECTS));
-    setTasks(load('ptm_tasks',    INIT_TASKS));
-    setEntries(load('ptm_entries', []));
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(u => setUser(u));
   }, []);
 
-  useEffect(() => { if (projects !== null) localStorage.setItem('ptm_projects', JSON.stringify(projects)); }, [projects]);
-  useEffect(() => { if (tasks    !== null) localStorage.setItem('ptm_tasks',    JSON.stringify(tasks));    }, [tasks]);
-  useEffect(() => { if (entries  !== null) localStorage.setItem('ptm_entries',  JSON.stringify(entries));  }, [entries]);
-
-  // Mark expired entries as pending
+  // Load all data once authenticated
   useEffect(() => {
-    if (!entries) return;
+    if (!user) return;
+    Promise.all([
+      apiFetch('/api/projects'),
+      apiFetch('/api/tasks'),
+      apiFetch('/api/entries'),
+    ]).then(([p, t, e]) => {
+      setProjects(p);
+      setTasks(t);
+      setEntries(e);
+    });
+  }, [user]);
+
+  // Expiry checker — marks overdue entries as 'pending' via API
+  useEffect(() => {
+    if (!user) return;
     const check = () => {
       const currentToday = getToday();
       const nowH = getNowHour();
-      setEntries(prev => prev.map(en => {
-        if (en.date <= currentToday && (en.date < currentToday || en.endHour <= nowH) && !en.status)
-          return { ...en, status: 'pending' };
-        return en;
-      }));
+      const expired = entries.filter(en =>
+        en.date <= currentToday &&
+        (en.date < currentToday || en.endHour <= nowH) &&
+        !en.status
+      );
+      if (!expired.length) return;
+      expired.forEach(en => {
+        fetch(`/api/entries/${en.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'pending' }),
+        });
+      });
+      setEntries(prev => prev.map(en =>
+        expired.find(e => e.id === en.id) ? { ...en, status: 'pending' } : en
+      ));
     };
     check();
     const iv = setInterval(check, 30000);
     return () => clearInterval(iv);
-  }, [entries !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, entries]);
 
-  if (!projects || !tasks || !entries) return null;
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setUser(null);
+    setProjects([]); setTasks([]); setEntries([]);
+  };
+
+  // ── Mutations ────────────────────────────────────────────
+  const addEntry = async (data) => {
+    const entry = await apiFetch('/api/entries', { method: 'POST', body: JSON.stringify(data) });
+    setEntries(prev => [...prev, entry]);
+  };
+
+  const updateEntry = async (updated) => {
+    setEntries(prev => prev.map(e => e.id === updated.id ? updated : e)); // optimistic
+    await fetch(`/api/entries/${updated.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startHour: updated.startHour, endHour: updated.endHour, status: updated.status }),
+    });
+  };
+
+  const removeEntry = async (id) => {
+    setEntries(prev => prev.filter(e => e.id !== id)); // optimistic
+    await fetch(`/api/entries/${id}`, { method: 'DELETE' });
+  };
+
+  const addTask = async (data) => {
+    const task = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(data) });
+    setTasks(prev => [...prev, task]);
+  };
+
+  const addProject = async (data) => {
+    const project = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(data) });
+    setProjects(prev => [...prev, project]);
+  };
+
+  const handleResolve = async (entryId, resolution) => {
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: resolution } : e));
+    await fetch(`/api/entries/${entryId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: resolution }),
+    });
+  };
+
+  // ── Render ───────────────────────────────────────────────
+  if (user === undefined) return null; // loading
+  if (!user) return <LoginPage onLogin={setUser} />;
 
   const calendarTaskIds = new Set(
     entries.filter(e => e.status !== 'failed').map(e => e.taskId)
   );
   const pendingEntries = entries.filter(e => e.status === 'pending');
 
-  const handleResolve = (entryId, resolution) => {
-    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: resolution } : e));
-  };
-
   return (
     <div className="app">
       <CalendarPanel
         entries={entries} tasks={tasks} projects={projects}
-        onAddEntry={en => setEntries(prev => [...prev, en])}
-        onUpdateEntry={en => setEntries(prev => prev.map(e => e.id === en.id ? en : e))}
-        onRemoveEntry={id => setEntries(prev => prev.filter(e => e.id !== id))}
+        onAddEntry={addEntry}
+        onUpdateEntry={updateEntry}
+        onRemoveEntry={removeEntry}
+        username={user.username}
+        onLogout={handleLogout}
       />
       <TaskPanel
         projects={projects} tasks={tasks} calendarTaskIds={calendarTaskIds}
-        onAddTask={t => setTasks(prev => [...prev, t])}
-        onAddProject={p => setProjects(prev => [...prev, p])}
+        onAddTask={addTask}
+        onAddProject={addProject}
         pendingEntries={pendingEntries}
         onResolve={handleResolve}
       />
