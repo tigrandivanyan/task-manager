@@ -100,9 +100,25 @@ export default function App() {
     setTasks(prev => [...prev, task]);
   };
 
+  const updateTask = async (id, data) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t)); // optimistic
+    const updated = await apiFetch(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    setTasks(prev => prev.map(t => t.id === id ? updated : t));
+  };
+
+  const deleteTask = async (id) => {
+    setTasks(prev => prev.filter(t => t.id !== id)); // optimistic
+    await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  };
+
   const addProject = async (data) => {
     const project = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(data) });
     setProjects(prev => [...prev, project]);
+  };
+
+  const deleteProject = async (id) => {
+    setProjects(prev => prev.filter(p => p.id !== id)); // optimistic
+    await fetch(`/api/projects/${id}`, { method: 'DELETE' });
   };
 
   const handleResolve = async (entryId, resolution) => {
@@ -136,7 +152,10 @@ export default function App() {
       <TaskPanel
         projects={projects} tasks={tasks} calendarTaskIds={calendarTaskIds}
         onAddTask={addTask}
+        onUpdateTask={updateTask}
+        onDeleteTask={deleteTask}
         onAddProject={addProject}
+        onDeleteProject={deleteProject}
         pendingEntries={pendingEntries}
         onResolve={handleResolve}
       />

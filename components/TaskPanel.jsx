@@ -14,12 +14,16 @@ function PriorityBadge({ priority }) {
   return <span className="task-priority" style={{ background: p.bg+'22', color: p.bg, border:`1px solid ${p.bg}44` }}>{p.label}</span>;
 }
 
-function TaskCard({ task, project }) {
+function TaskCard({ task, project, onEdit, onDelete }) {
+  const [hovered, setHovered] = useState(false);
+
   return (
     <div
       className="task-card"
       draggable
       style={{ borderLeftColor: project?.color || '#ccc' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onDragStart={e => { e.dataTransfer.setData('taskId', task.id); e.dataTransfer.effectAllowed = 'move'; }}
     >
       <PriorityBadge priority={task.priority} />
@@ -39,8 +43,99 @@ function TaskCard({ task, project }) {
           </div>
         )}
       </div>
-      <div className="drag-handle" title="Drag to calendar">
-        <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="4" cy="3" r="1" fill="currentColor"/><circle cx="8" cy="3" r="1" fill="currentColor"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="9" r="1" fill="currentColor"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>
+      <div style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>
+        {hovered && <>
+          <button
+            className="task-action-btn"
+            title="Edit task"
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onEdit(task); }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M8.5 1.5a1.207 1.207 0 011.707 1.707L3.5 9.914 1 10.5l.586-2.5L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+          <button
+            className="task-action-btn task-action-btn-delete"
+            title="Delete task"
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => { e.stopPropagation(); onDelete(task.id); }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 3h8M5 3V2h2v1M4.5 5v4M7.5 5v4M3 3l.5 6.5a.5.5 0 00.5.5h4a.5.5 0 00.5-.5L9 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
+        </>}
+        <div className="drag-handle" title="Drag to calendar">
+          <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="4" cy="3" r="1" fill="currentColor"/><circle cx="8" cy="3" r="1" fill="currentColor"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="9" r="1" fill="currentColor"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditTaskModal({ task, projectColor, onSave, onClose }) {
+  const [title,    setTitle]    = useState(task.title);
+  const [desc,     setDesc]     = useState(task.description || '');
+  const [priority, setPriority] = useState(task.priority || 3);
+
+  const submit = () => {
+    if (!title.trim()) return;
+    onSave(task.id, { title: title.trim(), description: desc.trim(), priority });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-box animate-in" onClick={e => e.stopPropagation()}
+        style={{ width: 440, maxWidth: '92vw', padding: 28, textAlign: 'left' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+          <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>Edit Task</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--text-muted)', padding:'0 2px', lineHeight:1 }}>×</button>
+        </div>
+
+        <div style={{ marginBottom:10 }}>
+          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:6 }}>Title</div>
+          <input
+            autoFocus
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onClose(); }}
+            style={{ width:'100%', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:8, padding:'9px 12px', fontSize:14, fontFamily:'inherit', color:'var(--text)', outline:'none' }}
+          />
+        </div>
+
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:6 }}>Description</div>
+          <textarea
+            value={desc}
+            onChange={e => setDesc(e.target.value)}
+            placeholder="Add a description…"
+            style={{ width:'100%', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:8, padding:'9px 12px', fontSize:13, fontFamily:'inherit', color:'var(--text)', outline:'none', resize:'none', height:80 }}
+          />
+        </div>
+
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Priority</div>
+          <div style={{ display:'flex', gap:6 }}>
+            {[1,2,3,4,5].map(p => {
+              const pm = PRIORITY_META[p];
+              return (
+                <button key={p}
+                  className={`priority-btn${priority === p ? ' active' : ''}`}
+                  style={priority === p ? { background: pm.bg } : {}}
+                  onClick={() => setPriority(p)}>
+                  {pm.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button className="btn-cancel" onClick={onClose}>Cancel</button>
+          <button className="btn-submit" style={{ background: projectColor || 'var(--text)' }} onClick={submit}>Save changes</button>
+        </div>
       </div>
     </div>
   );
@@ -50,17 +145,14 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
   const [title,       setTitle]       = useState('');
   const [desc,        setDesc]        = useState('');
   const [priority,    setPriority]    = useState(3);
-  const [attachments, setAttachments] = useState([]); // { _key, name, url, size, uploading, error }
+  const [attachments, setAttachments] = useState([]);
   const fileRef = useRef(null);
 
   const handleFiles = async (files) => {
     const incoming = Array.from(files);
-    // Add placeholders immediately so the user sees progress
     const placeholders = incoming.map(f => ({
       _key: `${f.name}-${Date.now()}-${Math.random()}`,
-      name: f.name,
-      uploading: true,
-      error: null,
+      name: f.name, uploading: true, error: null,
     }));
     setAttachments(prev => [...prev, ...placeholders]);
 
@@ -81,8 +173,6 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
         ));
       }
     }));
-
-    // Reset so the same file can be selected again
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -119,14 +209,13 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
         })}
       </div>
 
-      {/* Attachment chips */}
       {attachments.length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:7 }}>
           {attachments.map(a => (
             <span key={a._key} style={{
               display:'inline-flex', alignItems:'center', gap:4,
               fontSize:11, borderRadius:5, padding:'3px 7px',
-              background: a.error ? '#fef2f2' : a.uploading ? 'var(--bg)' : 'var(--bg)',
+              background: a.error ? '#fef2f2' : 'var(--bg)',
               border: `1px solid ${a.error ? '#fca5a5' : 'var(--border)'}`,
               color: a.error ? '#ef4444' : 'var(--text-muted)',
               maxWidth: 180, overflow:'hidden',
@@ -169,58 +258,97 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
   );
 }
 
-function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask }) {
-  const [expanded, setExpanded] = useState(false);
-  const [creating, setCreating] = useState(false);
+function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask, onUpdateTask, onDeleteTask, onDeleteProject }) {
+  const storageKey = `project-expanded-${project.id}`;
+  const [expanded,    setExpanded]    = useState(() => {
+    try { return localStorage.getItem(storageKey) === 'true'; } catch { return false; }
+  });
+  const [creating,    setCreating]    = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
 
-  const projectTasks = tasks.filter(t => t.projectId === project.id).sort((a,b) => a.priority - b.priority);
-  const visibleTasks = projectTasks.filter(t => !calendarTaskIds.has(t.id));
+  const toggleExpanded = (val) => {
+    const next = typeof val === 'function' ? val(expanded) : val;
+    setExpanded(next);
+    try { localStorage.setItem(storageKey, String(next)); } catch {}
+  };
+
+  const projectTasks  = tasks.filter(t => t.projectId === project.id).sort((a,b) => a.priority - b.priority);
+  const visibleTasks  = projectTasks.filter(t => !calendarTaskIds.has(t.id));
 
   return (
     <div className="project-group animate-in">
-      <div className="project-header" onClick={()=>setExpanded(e=>!e)}>
+      <div className="project-header" onClick={() => toggleExpanded(e => !e)}>
         {project.iconUrl
           ? <img src={project.iconUrl} alt="" style={{ width:32, height:32, borderRadius:8, objectFit:'cover', flexShrink:0 }} />
-          : <div className="project-emoji" style={{background:project.color+'22',color:project.color}}>{project.emoji || '◈'}</div>
+          : <div className="project-emoji" style={{ background:project.color+'22', color:project.color }}>{project.emoji || '◈'}</div>
         }
         <div className="project-name">{project.name}</div>
         <span className="project-count">{visibleTasks.length}</span>
-        <div className={`project-chevron${expanded?' open':''}`}>
+        <button
+          className="project-delete-btn"
+          title="Delete project"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => {
+            e.stopPropagation();
+            if (window.confirm(`Delete project "${project.name}" and all its tasks?`)) {
+              onDeleteProject(project.id);
+            }
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 3.5h9M5.5 3.5V2.5h2v1M4.5 5.5v4.5M8.5 5.5v4.5M3 3.5l.5 7a.5.5 0 00.5.5h5a.5.5 0 00.5-.5l.5-7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <div className={`project-chevron${expanded ? ' open' : ''}`}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </div>
       </div>
       {expanded && (
         <div className="project-tasks">
           {visibleTasks.length === 0 && !creating && <div className="empty-tasks">No tasks — add one below</div>}
-          {visibleTasks.map(task => <TaskCard key={task.id} task={task} project={project} />)}
+          {visibleTasks.map(task => (
+            <TaskCard
+              key={task.id} task={task} project={project}
+              onEdit={setEditingTask}
+              onDelete={onDeleteTask}
+            />
+          ))}
           {creating
-            ? <CreateTaskForm projectId={project.id} projectColor={project.color} onAdd={onAddTask} onCancel={()=>setCreating(false)} />
-            : <button className="btn-add-task" onClick={()=>setCreating(true)}>
+            ? <CreateTaskForm projectId={project.id} projectColor={project.color} onAdd={onAddTask} onCancel={() => setCreating(false)} />
+            : <button className="btn-add-task" onClick={() => setCreating(true)}>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 Add task
               </button>
           }
         </div>
       )}
+
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          projectColor={project.color}
+          onSave={onUpdateTask}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
     </div>
   );
 }
 
 function CreateProjectForm({ onAdd, onCancel }) {
-  const [name,         setName]         = useState('');
-  const [color,        setColor]        = useState(PROJECT_COLORS[0]);
-  const [emoji,        setEmoji]        = useState(PROJECT_EMOJIS[0]);
-  const [iconMode,     setIconMode]     = useState('emoji'); // 'emoji' | 'image'
-  const [iconUrl,      setIconUrl]      = useState(null);
-  const [iconUploading,setIconUploading]= useState(false);
-  const [iconError,    setIconError]    = useState('');
+  const [name,          setName]          = useState('');
+  const [color,         setColor]         = useState(PROJECT_COLORS[0]);
+  const [emoji,         setEmoji]         = useState(PROJECT_EMOJIS[0]);
+  const [iconMode,      setIconMode]      = useState('emoji');
+  const [iconUrl,       setIconUrl]       = useState(null);
+  const [iconUploading, setIconUploading] = useState(false);
+  const [iconError,     setIconError]     = useState('');
   const iconFileRef = useRef(null);
 
   const handleIconFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIconError('');
-    setIconUploading(true);
+    setIconError(''); setIconUploading(true);
     try {
       const form = new FormData();
       form.append('file', file);
@@ -241,16 +369,12 @@ function CreateProjectForm({ onAdd, onCancel }) {
       const filename = iconUrl.split('/').pop();
       await fetch(`/api/upload/${filename}`, { method: 'DELETE' });
     }
-    setIconUrl(null);
-    setIconError('');
+    setIconUrl(null); setIconError('');
   };
 
   const submit = () => {
     if (!name.trim() || iconUploading) return;
-    onAdd({
-      name: name.trim(), color, emoji,
-      iconUrl: iconMode === 'image' ? (iconUrl || null) : null,
-    });
+    onAdd({ name: name.trim(), color, emoji, iconUrl: iconMode === 'image' ? (iconUrl || null) : null });
     onCancel();
   };
 
@@ -258,18 +382,17 @@ function CreateProjectForm({ onAdd, onCancel }) {
     <div className="new-project-form animate-in">
       <h4>New Project</h4>
       <input className="project-name-input" autoFocus placeholder="Project name…" value={name}
-        onChange={e=>setName(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submit(); if(e.key==='Escape') onCancel(); }} />
+        onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }} />
 
       <div className="swatch-label">Color</div>
       <div className="color-swatches">
-        {PROJECT_COLORS.map(c => <div key={c} className={`color-swatch${color===c?' selected':''}`} style={{background:c}} onClick={()=>setColor(c)} />)}
+        {PROJECT_COLORS.map(c => <div key={c} className={`color-swatch${color===c?' selected':''}`} style={{ background:c }} onClick={() => setColor(c)} />)}
       </div>
 
       <div className="swatch-label">Icon</div>
-      {/* Mode toggle */}
       <div style={{ display:'flex', background:'var(--bg)', borderRadius:8, padding:3, gap:3, marginBottom:12 }}>
         {['emoji','image'].map(m => (
-          <button key={m} onClick={()=>setIconMode(m)} style={{
+          <button key={m} onClick={() => setIconMode(m)} style={{
             flex:1, padding:'5px 0', borderRadius:6, border:'none', cursor:'pointer',
             fontSize:11, fontWeight:600, fontFamily:'inherit', transition:'all .12s',
             background: iconMode===m ? '#fff' : 'transparent',
@@ -282,11 +405,11 @@ function CreateProjectForm({ onAdd, onCancel }) {
       </div>
 
       {iconMode === 'emoji' ? (
-        <div className="emoji-opts" style={{marginBottom:14}}>
+        <div className="emoji-opts" style={{ marginBottom:14 }}>
           {PROJECT_EMOJIS.map(e2 => (
             <div key={e2} className={`emoji-opt${emoji===e2?' selected':''}`}
-              style={{background:emoji===e2?color+'33':'var(--bg)',color:emoji===e2?color:'var(--text-muted)'}}
-              onClick={()=>setEmoji(e2)}>{e2}</div>
+              style={{ background: emoji===e2 ? color+'33' : 'var(--bg)', color: emoji===e2 ? color : 'var(--text-muted)' }}
+              onClick={() => setEmoji(e2)}>{e2}</div>
           ))}
         </div>
       ) : (
@@ -296,14 +419,11 @@ function CreateProjectForm({ onAdd, onCancel }) {
               <img src={iconUrl} alt="icon preview" style={{ width:48, height:48, borderRadius:10, objectFit:'cover', border:'1px solid var(--border)' }} />
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:12, color:'var(--text)', fontWeight:500, marginBottom:4 }}>Icon uploaded</div>
-                <button onClick={removeIcon} style={{
-                  fontSize:11, color:'#ef4444', background:'none', border:'none',
-                  cursor:'pointer', padding:0, fontFamily:'inherit',
-                }}>Remove</button>
+                <button onClick={removeIcon} style={{ fontSize:11, color:'#ef4444', background:'none', border:'none', cursor:'pointer', padding:0, fontFamily:'inherit' }}>Remove</button>
               </div>
             </div>
           ) : (
-            <button onClick={()=>iconFileRef.current?.click()} disabled={iconUploading} style={{
+            <button onClick={() => iconFileRef.current?.click()} disabled={iconUploading} style={{
               display:'flex', alignItems:'center', justifyContent:'center', gap:7,
               width:'100%', padding:'28px 0', borderRadius:10,
               border:'1.5px dashed var(--border)', background:'var(--bg)',
@@ -311,12 +431,12 @@ function CreateProjectForm({ onAdd, onCancel }) {
               fontSize:13, fontFamily:'inherit', transition:'border-color .15s',
             }}>
               {iconUploading
-                ? <><span style={{fontSize:14,animation:'spin 1s linear infinite',display:'inline-block'}}>↻</span> Uploading…</>
+                ? <><span style={{ fontSize:14, animation:'spin 1s linear infinite', display:'inline-block' }}>↻</span> Uploading…</>
                 : <><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 4l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M1 10v2a1 1 0 001 1h10a1 1 0 001-1v-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> Upload image</>
               }
             </button>
           )}
-          <input ref={iconFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleIconFile} />
+          <input ref={iconFileRef} type="file" accept="image/*" style={{ display:'none' }} onChange={handleIconFile} />
           {iconError && <div style={{ fontSize:11, color:'#ef4444', marginTop:6 }}>{iconError}</div>}
         </div>
       )}
@@ -362,7 +482,7 @@ function NotificationBar({ pendingEntries, tasks, projects, onResolve }) {
   );
 }
 
-export default function TaskPanel({ projects, tasks, calendarTaskIds, onAddTask, onAddProject, pendingEntries, onResolve }) {
+export default function TaskPanel({ projects, tasks, calendarTaskIds, onAddTask, onUpdateTask, onDeleteTask, onAddProject, onDeleteProject, pendingEntries, onResolve }) {
   const [creatingProject, setCreatingProject] = useState(false);
 
   return (
@@ -373,13 +493,13 @@ export default function TaskPanel({ projects, tasks, calendarTaskIds, onAddTask,
           <div className="task-panel-label">Projects</div>
           <div className="task-panel-title">My Tasks</div>
         </div>
-        <button className="btn-new-project" onClick={()=>setCreatingProject(true)}>
+        <button className="btn-new-project" onClick={() => setCreatingProject(true)}>
           <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v11M1 6.5h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
           New Project
         </button>
       </div>
       <div className="task-list-scroll">
-        {creatingProject && <CreateProjectForm onAdd={onAddProject} onCancel={()=>setCreatingProject(false)} />}
+        {creatingProject && <CreateProjectForm onAdd={onAddProject} onCancel={() => setCreatingProject(false)} />}
         {projects.length === 0 && !creatingProject && (
           <div className="empty-state">
             <div className="empty-icon">◈</div>
@@ -388,8 +508,12 @@ export default function TaskPanel({ projects, tasks, calendarTaskIds, onAddTask,
           </div>
         )}
         {projects.map(project => (
-          <ProjectGroup key={project.id} project={project} tasks={tasks}
-            calendarTaskIds={calendarTaskIds} onAddTask={onAddTask} />
+          <ProjectGroup
+            key={project.id}
+            project={project} tasks={tasks} calendarTaskIds={calendarTaskIds}
+            onAddTask={onAddTask} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask}
+            onDeleteProject={onDeleteProject}
+          />
         ))}
       </div>
     </div>
