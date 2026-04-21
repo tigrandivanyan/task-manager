@@ -130,6 +130,8 @@ export default function App() {
     });
   };
 
+  const [mobileTab, setMobileTab] = useState('calendar');
+
   // ── Render ───────────────────────────────────────────────
   if (user === undefined) return null; // loading
   if (!user) return <LoginPage onLogin={setUser} />;
@@ -141,24 +143,59 @@ export default function App() {
 
   return (
     <div className="app">
-      <CalendarPanel
-        entries={entries} tasks={tasks} projects={projects}
-        onAddEntry={addEntry}
-        onUpdateEntry={updateEntry}
-        onRemoveEntry={removeEntry}
-        username={user.username}
-        onLogout={handleLogout}
-      />
-      <TaskPanel
-        projects={projects} tasks={tasks} calendarTaskIds={calendarTaskIds}
-        onAddTask={addTask}
-        onUpdateTask={updateTask}
-        onDeleteTask={deleteTask}
-        onAddProject={addProject}
-        onDeleteProject={deleteProject}
-        pendingEntries={pendingEntries}
-        onResolve={handleResolve}
-      />
+      <div className={`mobile-panel${mobileTab === 'calendar' ? ' mobile-active' : ''}`}>
+        <CalendarPanel
+          entries={entries} tasks={tasks} projects={projects}
+          onAddEntry={addEntry}
+          onUpdateEntry={updateEntry}
+          onRemoveEntry={removeEntry}
+          username={user.username}
+          onLogout={handleLogout}
+        />
+      </div>
+      <div className={`mobile-panel${mobileTab === 'tasks' ? ' mobile-active' : ''}`}>
+        <TaskPanel
+          projects={projects} tasks={tasks} calendarTaskIds={calendarTaskIds}
+          onAddTask={addTask}
+          onUpdateTask={updateTask}
+          onDeleteTask={deleteTask}
+          onAddProject={addProject}
+          onDeleteProject={deleteProject}
+          pendingEntries={pendingEntries}
+          onResolve={handleResolve}
+        />
+      </div>
+
+      <nav className="mobile-tab-bar" role="tablist">
+        <button
+          role="tab" aria-selected={mobileTab === 'calendar'}
+          className={`mobile-tab${mobileTab === 'calendar' ? ' active' : ''}`}
+          onClick={() => setMobileTab('calendar')}
+        >
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="3" y="5" width="16" height="14" rx="2.5" stroke="currentColor" strokeWidth="1.6"/>
+            <path d="M3 9h16" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path d="M7 3v4M15 3v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <rect x="7" y="13" width="2" height="2" rx=".5" fill="currentColor"/>
+            <rect x="11" y="13" width="2" height="2" rx=".5" fill="currentColor"/>
+          </svg>
+          <span>Calendar</span>
+        </button>
+        <button
+          role="tab" aria-selected={mobileTab === 'tasks'}
+          className={`mobile-tab${mobileTab === 'tasks' ? ' active' : ''}`}
+          onClick={() => setMobileTab('tasks')}
+        >
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M9 6h8M9 11h8M9 16h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path d="M5 6l.01 0M5 11l.01 0M5 16l.01 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+          <span>Tasks</span>
+          {pendingEntries.length > 0 && (
+            <span className="tab-badge">{pendingEntries.length}</span>
+          )}
+        </button>
+      </nav>
     </div>
   );
 }

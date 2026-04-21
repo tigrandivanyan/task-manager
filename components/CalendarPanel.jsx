@@ -346,7 +346,7 @@ export default function CalendarPanel({ entries, tasks, projects, onAddEntry, on
         </div>
 
         {/* User section */}
-        <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', padding:'12px 10px', flexShrink:0 }}>
+        <div className="cal-user-section" style={{ borderTop:'1px solid rgba(255,255,255,0.07)', padding:'12px 10px', flexShrink:0 }}>
           <div style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.35)', marginBottom:7, paddingLeft:4, letterSpacing:'.02em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {username}
           </div>

@@ -3,6 +3,7 @@
   --text: #1a1917; --text-muted: #9b9890; --text-light: #b0ada6;
   --border: rgba(0,0,0,0.07); --border-dark: rgba(255,255,255,0.07);
   --radius: 12px; --hour-h: 80px;
+  --tab-h: 60px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -10,8 +11,8 @@ body{background:var(--bg);color:var(--text)}
 .app{display:flex;height:100vh;overflow:hidden}
 
 /* ── MODAL ── */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100}
-.modal-box{background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);border:1px solid var(--border)}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal-box{background:var(--surface);border-radius:16px;box-shadow:0 24px 64px rgba(0,0,0,.18);border:1px solid var(--border);width:100%}
 
 /* ── CALENDAR PANEL ── */
 .calendar-panel{width:35vw;min-width:420px;background:var(--panel-dark);display:flex;flex-direction:row;height:100vh;overflow:hidden;border-right:1px solid var(--border-dark)}
@@ -22,10 +23,10 @@ body{background:var(--bg);color:var(--text)}
 .month-nav{display:flex;flex-direction:column;gap:6px}
 .month-name{font-size:15px;font-weight:700;color:#fff;line-height:1.2}
 .nav-btns{display:flex;gap:2px}
-.nav-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.35);padding:4px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:inherit;transition:color .15s,background .15s}
+.nav-btn{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.35);padding:4px 6px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:inherit;transition:color .15s,background .15s;-webkit-tap-highlight-color:transparent}
 .nav-btn:hover{color:#fff;background:rgba(255,255,255,.09)}
 .date-list{padding:4px 8px;overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.06) transparent}
-.date-item{display:flex;flex-direction:column;align-items:center;padding:8px 6px;border-radius:11px;cursor:pointer;transition:background .12s;margin-bottom:2px;text-align:center;position:relative}
+.date-item{display:flex;flex-direction:column;align-items:center;padding:8px 6px;border-radius:11px;cursor:pointer;transition:background .12s;margin-bottom:2px;text-align:center;position:relative;-webkit-tap-highlight-color:transparent}
 .date-item:hover{background:rgba(255,255,255,.05)}
 .date-item.selected{background:rgba(255,255,255,.1)}
 .date-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:rgba(255,255,255,.4);flex-shrink:0;margin-bottom:2px}
@@ -53,43 +54,21 @@ body{background:var(--bg);color:var(--text)}
 /* ── CALENDAR TASK BLOCKS ── */
 .cal-task-block{
   position:absolute;left:0;right:0;
-  border-radius:10px;
-  padding:8px 32px 8px 12px;
+  border-radius:10px;padding:8px 32px 8px 12px;
   cursor:grab;user-select:none;pointer-events:all;
-  transition:box-shadow .15s,opacity .15s,transform .1s;
-  overflow:hidden;
+  transition:box-shadow .15s,opacity .15s,transform .1s;overflow:hidden;
 }
-.cal-task-block::before{
-  content:'';position:absolute;inset:0;border-radius:10px;
-  background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 60%);
-  pointer-events:none;
-}
-.cal-task-block::after{
-  content:'';position:absolute;inset:0;border-radius:10px;
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);
-  pointer-events:none;
-}
+.cal-task-block::before{content:'';position:absolute;inset:0;border-radius:10px;background:linear-gradient(135deg,rgba(255,255,255,.18) 0%,rgba(255,255,255,0) 60%);pointer-events:none}
+.cal-task-block::after{content:'';position:absolute;inset:0;border-radius:10px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.15);pointer-events:none}
 .cal-task-block:hover{box-shadow:0 6px 24px rgba(0,0,0,.5);transform:translateY(-1px)}
 .cal-task-block:active{cursor:grabbing;opacity:.9;transform:translateY(0)}
 .cal-task-title{font-size:12px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35;text-shadow:0 1px 2px rgba(0,0,0,.2)}
 .cal-task-time{font-size:10px;color:rgba(255,255,255,.7);margin-top:3px;display:flex;align-items:center;gap:4px}
 .cal-task-dur{color:rgba(255,255,255,.45);font-size:9px}
-.cal-task-remove{
-  position:absolute;top:6px;right:6px;
-  background:rgba(0,0,0,.28);border:none;
-  color:rgba(255,255,255,.8);width:20px;height:20px;
-  border-radius:50%;font-size:15px;line-height:1;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  opacity:0;transition:opacity .15s,background .12s;padding:0;
-}
+.cal-task-remove{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.28);border:none;color:rgba(255,255,255,.8);width:20px;height:20px;border-radius:50%;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .12s;padding:0}
 .cal-task-block:hover .cal-task-remove{opacity:1}
 .cal-task-remove:hover{background:rgba(0,0,0,.5)!important}
-.cal-task-resize{
-  position:absolute;bottom:0;left:0;right:0;height:14px;
-  cursor:ns-resize;border-radius:0 0 10px 10px;
-  display:flex;align-items:center;justify-content:center;
-  opacity:0;transition:opacity .15s;
-}
+.cal-task-resize{position:absolute;bottom:0;left:0;right:0;height:14px;cursor:ns-resize;border-radius:0 0 10px 10px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
 .cal-task-block:hover .cal-task-resize{opacity:1}
 .cal-task-resize::after{content:'';width:26px;height:2.5px;background:rgba(255,255,255,.4);border-radius:2px}
 .drop-ghost{position:absolute;left:0;right:0;background:rgba(255,255,255,.06);border:1.5px dashed rgba(255,255,255,.22);border-radius:10px;pointer-events:none}
@@ -124,16 +103,16 @@ body{background:var(--bg);color:var(--text)}
 .task-panel-header{padding:24px 28px 0;display:flex;align-items:flex-end;justify-content:space-between;flex-shrink:0}
 .task-panel-label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted);margin-bottom:3px}
 .task-panel-title{font-size:22px;font-weight:600;color:var(--text)}
-.btn-new-project{display:flex;align-items:center;gap:6px;background:var(--text);color:#fff;border:none;cursor:pointer;padding:8px 15px;border-radius:9px;font-size:13px;font-weight:500;font-family:inherit;transition:opacity .15s;margin-bottom:2px}
+.btn-new-project{display:flex;align-items:center;gap:6px;background:var(--text);color:#fff;border:none;cursor:pointer;padding:8px 15px;border-radius:9px;font-size:13px;font-weight:500;font-family:inherit;transition:opacity .15s;margin-bottom:2px;-webkit-tap-highlight-color:transparent}
 .btn-new-project:hover{opacity:.78}
 .task-list-scroll{flex:1;overflow-y:auto;padding:16px 28px 32px;scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.08) transparent}
 .project-group{background:var(--surface);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.04)}
-.project-header{display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;transition:background .12s;user-select:none}
+.project-header{display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;transition:background .12s;user-select:none;-webkit-tap-highlight-color:transparent;min-height:56px}
 .project-header:hover{background:rgba(0,0,0,.02)}
 .project-emoji{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;font-family:monospace}
 .project-name{flex:1;font-size:14px;font-weight:600;color:var(--text)}
 .project-count{font-size:11px;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:20px;font-weight:500}
-.project-delete-btn{background:none;border:none;cursor:pointer;color:var(--text-light);padding:5px;border-radius:6px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .12s,background .12s;flex-shrink:0}
+.project-delete-btn{background:none;border:none;cursor:pointer;color:var(--text-light);padding:8px;border-radius:6px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,color .12s,background .12s;flex-shrink:0;-webkit-tap-highlight-color:transparent}
 .project-header:hover .project-delete-btn{opacity:1}
 .project-delete-btn:hover{color:#ef4444!important;background:#fef2f2}
 .project-chevron{color:var(--text-muted);transition:transform .2s;display:flex;flex-shrink:0}
@@ -148,25 +127,27 @@ body{background:var(--bg);color:var(--text)}
 .task-attachments{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 .attachment-chip{font-size:10px;color:var(--text-muted);background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 6px}
 .drag-handle{color:var(--text-light);cursor:grab;padding:2px;margin-top:2px;flex-shrink:0}
-.task-action-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);padding:4px;border-radius:5px;display:flex;align-items:center;justify-content:center;transition:color .12s,background .12s;flex-shrink:0}
+.task-card-actions{display:flex;align-items:center;gap:2px;flex-shrink:0;margin-top:1px}
+.task-action-btn{background:none;border:none;cursor:pointer;color:var(--text-muted);padding:5px;border-radius:5px;display:flex;align-items:center;justify-content:center;transition:color .12s,background .12s,opacity .15s;flex-shrink:0;opacity:0;-webkit-tap-highlight-color:transparent}
+.task-card:hover .task-action-btn{opacity:1}
 .task-action-btn:hover{color:var(--text);background:var(--border)}
 .task-action-btn-delete:hover{color:#ef4444!important;background:#fef2f2!important}
 .empty-tasks{font-size:12px;color:var(--text-muted);padding:10px 4px 6px;text-align:center}
-.btn-add-task{display:flex;align-items:center;gap:6px;background:none;border:1.5px dashed rgba(0,0,0,.1);border-radius:8px;padding:8px 12px;width:100%;cursor:pointer;font-size:12px;color:var(--text-muted);font-family:inherit;transition:border-color .15s,color .15s;margin-top:2px}
+.btn-add-task{display:flex;align-items:center;gap:6px;background:none;border:1.5px dashed rgba(0,0,0,.1);border-radius:8px;padding:8px 12px;width:100%;cursor:pointer;font-size:12px;color:var(--text-muted);font-family:inherit;transition:border-color .15s,color .15s;margin-top:2px;-webkit-tap-highlight-color:transparent}
 .btn-add-task:hover{border-color:rgba(0,0,0,.2);color:var(--text)}
 .task-form{padding:12px;border-top:1px solid var(--border)}
 .task-form input,.task-form textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:13px;font-family:inherit;color:var(--text);margin-bottom:7px;outline:none;transition:border-color .15s}
 .task-form input:focus,.task-form textarea:focus{border-color:rgba(0,0,0,.2);background:#fff}
 .task-form textarea{resize:none;height:54px}
 .task-form-row{display:flex;gap:6px;margin-bottom:8px;align-items:center}
-.priority-btn{flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;transition:all .12s;color:var(--text-muted)}
+.priority-btn{flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;transition:all .12s;color:var(--text-muted);-webkit-tap-highlight-color:transparent}
 .priority-btn.active{color:#fff;border-color:transparent}
 .btn-attach{display:flex;align-items:center;gap:5px;background:none;border:1px solid var(--border);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--text-muted);cursor:pointer;font-family:inherit;transition:border-color .15s}
 .btn-attach:hover{border-color:rgba(0,0,0,.2);color:var(--text)}
 .form-actions{display:flex;gap:7px;justify-content:flex-end}
-.btn-cancel{padding:7px 13px;border-radius:7px;border:1px solid var(--border);background:none;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text-muted);transition:background .12s}
+.btn-cancel{padding:7px 13px;border-radius:7px;border:1px solid var(--border);background:none;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text-muted);transition:background .12s;-webkit-tap-highlight-color:transparent}
 .btn-cancel:hover{background:var(--bg)}
-.btn-submit{padding:7px 15px;border-radius:7px;border:none;color:#fff;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:opacity .15s}
+.btn-submit{padding:7px 15px;border-radius:7px;border:none;color:#fff;cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:opacity .15s;-webkit-tap-highlight-color:transparent}
 .btn-submit:hover{opacity:.82}
 .new-project-form{background:var(--surface);border-radius:var(--radius);padding:18px;margin-bottom:10px;border:1px solid var(--border);box-shadow:0 2px 12px rgba(0,0,0,.06)}
 .new-project-form h4{font-size:14px;font-weight:600;margin-bottom:14px}
@@ -174,11 +155,11 @@ body{background:var(--bg);color:var(--text)}
 .project-name-input:focus{border-color:rgba(0,0,0,.2);background:#fff}
 .swatch-label{font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px}
 .color-swatches{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
-.color-swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .12s,border-color .12s}
+.color-swatch{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .12s,border-color .12s;-webkit-tap-highlight-color:transparent}
 .color-swatch:hover{transform:scale(1.1)}
 .color-swatch.selected{border-color:var(--text);transform:scale(1.12)}
 .emoji-opts{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
-.emoji-opt{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;font-family:monospace;transition:background .12s,color .12s;font-weight:700;border:1.5px solid transparent}
+.emoji-opt{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;font-family:monospace;transition:background .12s,color .12s;font-weight:700;border:1.5px solid transparent;-webkit-tap-highlight-color:transparent}
 .emoji-opt.selected{border-color:currentColor}
 .empty-state{text-align:center;padding:60px 20px}
 .empty-icon{font-size:36px;color:var(--text-light);margin-bottom:12px;font-family:monospace}
@@ -193,50 +174,174 @@ body{background:var(--bg);color:var(--text)}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.08);border-radius:4px}
 .calendar-panel ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08)}
 
+/* ── MOBILE PANEL WRAPPERS (desktop: invisible) ── */
+.mobile-panel{display:contents}
+.mobile-tab-bar{display:none}
+
+/* ── TOUCH: action buttons always visible ── */
+@media (hover: none) {
+  .task-action-btn{opacity:.4}
+  .task-card:active .task-action-btn{opacity:1}
+  .project-delete-btn{opacity:.3}
+}
+
 /* ── MOBILE ── */
 @media (max-width: 768px) {
-  html, body { height: auto; overflow: auto; }
-  .app { flex-direction: column; height: auto; min-height: 100dvh; overflow: visible; }
+  html,body{height:100%;overflow:hidden}
 
-  .calendar-panel {
-    width: 100%; min-width: unset;
-    height: auto; flex-direction: column;
-    border-right: none; border-bottom: 1px solid var(--border-dark);
+  .app{
+    flex-direction:column;
+    height:100dvh;
+    height:100vh; /* fallback */
+    overflow:hidden;
   }
 
-  /* Dates become a horizontal scrolling strip */
-  .date-column {
-    width: 100%; min-width: unset;
-    flex-direction: column; border-right: none;
-    border-bottom: 1px solid var(--border-dark);
+  /* Tab panels */
+  .mobile-panel{
+    display:none;
+    flex:1;
+    flex-direction:column;
+    overflow:hidden;
+    min-height:0;
   }
-  .cal-header { padding: 16px 16px 10px; }
-  .month-nav { flex-direction: row; align-items: center; justify-content: space-between; }
-  .date-list {
-    display: flex; flex-direction: row;
-    overflow-x: auto; overflow-y: hidden;
-    padding: 6px 12px 10px; gap: 4px; flex: unset;
-    scrollbar-width: none;
-  }
-  .date-list::-webkit-scrollbar { display: none; }
-  .date-item {
-    flex-direction: column; flex-shrink: 0;
-    padding: 6px 10px; min-width: 54px;
-  }
-  .date-num { width: 32px; height: 32px; font-size: 14px; }
+  .mobile-panel.mobile-active{display:flex}
 
-  /* Hour grid below dates */
-  .grid-column { min-height: 50vh; }
-  .hour-grid-container { max-height: 50vh; }
-  .cal-day-label { padding: 12px 14px 8px; }
+  /* Bottom tab bar */
+  .mobile-tab-bar{
+    display:flex;
+    flex-shrink:0;
+    background:#0d0d0c;
+    border-top:1px solid rgba(255,255,255,.09);
+    height:calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom:env(safe-area-inset-bottom, 0px);
+  }
+  .mobile-tab{
+    flex:1;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:5px;
+    background:none;border:none;cursor:pointer;
+    color:rgba(255,255,255,.35);
+    font-size:10px;font-weight:600;font-family:inherit;
+    letter-spacing:.05em;text-transform:uppercase;
+    position:relative;transition:color .15s;
+    -webkit-tap-highlight-color:transparent;
+    padding:0;
+  }
+  .mobile-tab.active{color:#8b5cf6}
+  .mobile-tab span{line-height:1}
+  .tab-badge{
+    position:absolute;top:8px;left:calc(50% + 4px);
+    background:#ef4444;color:#fff;
+    font-size:9px;font-weight:700;
+    min-width:16px;height:16px;border-radius:8px;
+    padding:0 4px;display:flex;align-items:center;justify-content:center;
+    border:1.5px solid #0d0d0c;
+  }
 
-  /* Task panel stacks below */
-  .task-panel { height: auto; overflow: visible; }
-  .task-list-scroll { overflow: visible; height: auto; padding: 12px 16px 40px; }
-  .task-panel-header { padding: 20px 16px 0; }
-  .notif-list { padding: 6px 16px 10px; }
-  .notif-header { padding: 10px 16px 6px; }
-  .notif-item { flex-wrap: wrap; gap: 6px; }
-  .notif-btns { width: 100%; }
-  .notif-btn-done, .notif-btn-fail { flex: 1; text-align: center; }
+  /* Calendar panel on mobile: column layout */
+  .calendar-panel{
+    width:100%;min-width:unset;
+    flex-direction:column;height:100%;
+    border-right:none;
+  }
+
+  /* Date column becomes a compact top strip */
+  .date-column{
+    width:100%;min-width:unset;
+    flex-direction:column;height:auto;flex-shrink:0;
+    border-right:none;border-bottom:1px solid rgba(255,255,255,.07);
+  }
+  .cal-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:env(safe-area-inset-top, 14px) 16px 10px;
+    flex-shrink:0;
+  }
+  .cal-label{display:none}
+  .month-nav{flex-direction:row;align-items:center;gap:10px}
+  .month-name{font-size:17px}
+  .nav-btns{gap:4px}
+  .nav-btn{padding:6px 8px;min-width:32px;min-height:32px}
+
+  /* Hide logout section in date column on mobile (use app settings instead) */
+  .cal-user-section{display:none}
+
+  /* Horizontal scrolling date strip */
+  .date-list{
+    display:flex;flex-direction:row;
+    overflow-x:auto;overflow-y:hidden;
+    padding:4px 12px 10px;gap:2px;
+    flex:unset;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .date-list::-webkit-scrollbar{display:none}
+  .date-item{
+    flex-direction:column;flex-shrink:0;
+    padding:7px 8px;min-width:52px;
+    margin-bottom:0;border-radius:12px;
+  }
+  .date-num{width:34px;height:34px;font-size:15px;margin-bottom:1px}
+  .date-day{font-size:9px}
+  .date-tasks{display:none} /* dots are enough on mobile */
+
+  /* Hour grid fills remaining space */
+  .grid-column{flex:1;min-height:0}
+  .hour-grid-container{
+    max-height:none;
+    padding-bottom:16px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .cal-day-label{padding:12px 16px 8px;font-size:10px}
+
+  /* Make task blocks easier to tap */
+  .cal-task-remove{opacity:1;width:24px;height:24px;font-size:16px}
+  .cal-task-resize{opacity:1}
+
+  /* Task panel on mobile */
+  .task-panel{height:100%;overflow:hidden}
+  .task-panel-header{padding:calc(env(safe-area-inset-top, 0px) + 18px) 20px 0}
+  .task-panel-title{font-size:20px}
+  .task-list-scroll{padding:14px 16px 24px;-webkit-overflow-scrolling:touch}
+
+  /* Bigger project headers for touch */
+  .project-header{padding:14px 16px;min-height:60px}
+  .project-delete-btn{opacity:.3;padding:10px}
+
+  /* Task cards: more generous touch targets */
+  .task-card{padding:12px 10px;cursor:default}
+  .task-action-btn{opacity:.45;padding:8px}
+  .drag-handle{display:none} /* no drag on mobile */
+
+  /* Notification bar */
+  .notif-header{padding:10px 16px 6px}
+  .notif-list{padding:6px 16px 10px}
+  .notif-item{flex-wrap:wrap;gap:6px;padding:10px 12px}
+  .notif-btns{width:100%;justify-content:stretch}
+  .notif-btn-done,.notif-btn-fail{flex:1;text-align:center;padding:9px 0;font-size:13px}
+
+  /* Modal: full-width sheet on mobile */
+  .modal-overlay{align-items:flex-end;padding:0}
+  .modal-box{
+    border-radius:20px 20px 0 0;
+    border-bottom:none;
+    padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+    max-height:92dvh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    animation:sheetIn .22s ease-out;
+  }
+  @keyframes sheetIn{
+    from{transform:translateY(100%);opacity:0}
+    to{transform:translateY(0);opacity:1}
+  }
+
+  /* Prevent iOS input zoom (needs font-size >= 16px) */
+  .task-form input,.task-form textarea,
+  .modal-box input,.modal-box textarea,
+  .project-name-input{font-size:16px}
+
+  /* Task form priority buttons: bigger */
+  .priority-btn{padding:10px 4px;font-size:12px}
+
+  /* Buttons: comfortable tap size */
+  .btn-cancel,.btn-submit{padding:11px 16px;font-size:14px}
+  .btn-new-project{padding:10px 16px}
 }

@@ -15,15 +15,11 @@ function PriorityBadge({ priority }) {
 }
 
 function TaskCard({ task, project, onEdit, onDelete }) {
-  const [hovered, setHovered] = useState(false);
-
   return (
     <div
       className="task-card"
       draggable
       style={{ borderLeftColor: project?.color || '#ccc' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       onDragStart={e => { e.dataTransfer.setData('taskId', task.id); e.dataTransfer.effectAllowed = 'move'; }}
     >
       <PriorityBadge priority={task.priority} />
@@ -43,29 +39,27 @@ function TaskCard({ task, project, onEdit, onDelete }) {
           </div>
         )}
       </div>
-      <div style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>
-        {hovered && <>
-          <button
-            className="task-action-btn"
-            title="Edit task"
-            onMouseDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); onEdit(task); }}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M8.5 1.5a1.207 1.207 0 011.707 1.707L3.5 9.914 1 10.5l.586-2.5L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-          <button
-            className="task-action-btn task-action-btn-delete"
-            title="Delete task"
-            onMouseDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); onDelete(task.id); }}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 3h8M5 3V2h2v1M4.5 5v4M7.5 5v4M3 3l.5 6.5a.5.5 0 00.5.5h4a.5.5 0 00.5-.5L9 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
-        </>}
+      <div className="task-card-actions">
+        <button
+          className="task-action-btn"
+          title="Edit task"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onEdit(task); }}
+        >
+          <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
+            <path d="M8.5 1.5a1.207 1.207 0 011.707 1.707L3.5 9.914 1 10.5l.586-2.5L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+        <button
+          className="task-action-btn task-action-btn-delete"
+          title="Delete task"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); onDelete(task.id); }}
+        >
+          <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
+            <path d="M2 3h8M5 3V2h2v1M4.5 5v4M7.5 5v4M3 3l.5 6.5a.5.5 0 00.5.5h4a.5.5 0 00.5-.5L9 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
         <div className="drag-handle" title="Drag to calendar">
           <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="4" cy="3" r="1" fill="currentColor"/><circle cx="8" cy="3" r="1" fill="currentColor"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="8" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="9" r="1" fill="currentColor"/><circle cx="8" cy="9" r="1" fill="currentColor"/></svg>
         </div>
