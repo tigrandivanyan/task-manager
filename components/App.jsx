@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import CalendarPanel from './CalendarPanel';
 import TaskPanel from './TaskPanel';
 import LoginPage from './LoginPage';
@@ -27,19 +27,40 @@ export default function App() {
       .then(u => setUser(u));
   }, []);
 
+  // Load all data (stable reference — setters are stable)
+  const loadAllData = useCallback(async () => {
+    try {
+      const [p, t, e] = await Promise.all([
+        apiFetch('/api/projects'),
+        apiFetch('/api/tasks'),
+        apiFetch('/api/entries'),
+      ]);
+      setProjects(p); setTasks(t); setEntries(e);
+    } catch {}
+  }, []);
+
   // Load all data once authenticated
   useEffect(() => {
     if (!user) return;
-    Promise.all([
-      apiFetch('/api/projects'),
-      apiFetch('/api/tasks'),
-      apiFetch('/api/entries'),
-    ]).then(([p, t, e]) => {
-      setProjects(p);
-      setTasks(t);
-      setEntries(e);
-    });
-  }, [user]);
+    loadAllData();
+  }, [user, loadAllData]);
+
+  // Poll every 30 s + refresh when app is foregrounded (PWA support)
+  useEffect(() => {
+    if (!user) return;
+    const iv = setInterval(loadAllData, 30000);
+    const onVisible = () => { if (!document.hidden) loadAllData(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVisible); };
+  }, [user, loadAllData]);
+
+  // SSE connection for push-style refresh events
+  useEffect(() => {
+    if (!user) return;
+    const es = new EventSource('/api/events');
+    es.onmessage = () => loadAllData();
+    return () => es.close();
+  }, [user, loadAllData]);
 
   // Expiry checker — marks overdue entries as 'pending' via API
   useEffect(() => {

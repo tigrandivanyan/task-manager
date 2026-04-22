@@ -1,4 +1,4 @@
-const CACHE = 'task-manager-v1';
+const CACHE = 'task-manager-v2';
 
 // Pre-cache the app shell on install
 self.addEventListener('install', event => {
@@ -8,12 +8,14 @@ self.addEventListener('install', event => {
   );
 });
 
-// Drop old caches on activate
+// Drop old caches on activate and notify all clients to refresh
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_ACTIVATED' })))
   );
 });
 
@@ -39,17 +41,16 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Static assets: cache-first
+  // Static assets: network-first to ensure freshness, fall back to cache
   event.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) return cached;
-      return fetch(request).then(res => {
+    fetch(request)
+      .then(res => {
         if (res.ok) {
           const clone = res.clone();
           caches.open(CACHE).then(c => c.put(request, clone));
         }
         return res;
-      });
-    })
+      })
+      .catch(() => caches.match(request))
   );
 });

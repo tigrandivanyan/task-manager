@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   HOUR_HEIGHT, DAY_START, DAY_END, HOURS,
   DAY_NAMES, MONTH_NAMES, PRIORITY_META,
@@ -136,9 +136,9 @@ function CalendarTaskBlock({ entry, task, project, layout, onUpdate, onRemove, o
   const moveRef    = useRef({ moved: false, startX: 0, startY: 0 });
   const color      = project?.color || '#8b5cf6';
   const top        = (entry.startHour - DAY_START) * HOUR_HEIGHT;
-  const height     = Math.max((entry.endHour - entry.startHour) * HOUR_HEIGHT, 28);
+  const height     = Math.max((entry.endHour - entry.startHour) * HOUR_HEIGHT, 20);
   const isSmall    = height < 52;
-  const isTiny     = height < 34;
+  const isTiny     = height < 28;
   const { col = 0, numCols = 1 } = layout || {};
   const widthPct   = 100 / numCols;
   const leftPct    = col * widthPct;
@@ -189,7 +189,7 @@ function CalendarTaskBlock({ entry, task, project, layout, onUpdate, onRemove, o
 
   return (
     <div
-      className={`cal-task-block${entry.status === 'done' ? ' status-done' : entry.status === 'failed' ? ' status-failed' : ''}`}
+      className={`cal-task-block${entry.status === 'done' ? ' status-done' : entry.status === 'failed' ? ' status-failed' : ''}${isTiny ? ' tiny' : ''}`}
       style={{ top, height, background: color, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)`, right: 'auto', cursor: isResolved ? 'pointer' : 'grab' }}
       onMouseDown={handleMouseDown}
     >
@@ -214,9 +214,14 @@ function CalendarTaskBlock({ entry, task, project, layout, onUpdate, onRemove, o
 function HourGrid({ entries, tasks, projects, selectedDate, onAddEntry, onUpdateEntry, onRemoveEntry, onShowDetail }) {
   const gridRef = useRef(null);
   const [ghost, setGhost] = useState(null);
+  const [nowHour, setNowHour] = useState(getNowHour);
   const currentToday = getToday();
   const isToday  = selectedDate === currentToday;
-  const nowHour  = getNowHour();
+
+  useEffect(() => {
+    const iv = setInterval(() => setNowHour(getNowHour()), 60000);
+    return () => clearInterval(iv);
+  }, []);
 
   const getHour = (clientY) => {
     const rect = gridRef.current.getBoundingClientRect();
