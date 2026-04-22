@@ -170,6 +170,7 @@ export default function App() {
           onAddEntry={addEntry}
           onUpdateEntry={updateEntry}
           onRemoveEntry={removeEntry}
+          onUpdateTask={updateTask}
           username={user.username}
           onLogout={handleLogout}
         />

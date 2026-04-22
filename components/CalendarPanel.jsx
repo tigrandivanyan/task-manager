@@ -44,18 +44,85 @@ function computeLayout(dayEntries) {
 }
 
 /* ── Task detail modal ─────────────────────────────────────── */
-function TaskDetailModal({ entry, task, project, onClose }) {
-  const pm    = PRIORITY_META[task?.priority] || PRIORITY_META[5];
+function TaskDetailModal({ entry, task, project, onClose, onUpdateTask }) {
   const color = project?.color || '#8b5cf6';
 
+  const [editing,     setEditing]     = useState(false);
+  const [title,       setTitle]       = useState(task?.title || '');
+  const [desc,        setDesc]        = useState(task?.description || '');
+  const [priority,    setPriority]    = useState(task?.priority || 3);
+  const [attachments, setAttachments] = useState(
+    () => (task?.attachments || []).map((a, i) => ({ ...a, _key: `e${i}` }))
+  );
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
+
+  const handleFiles = async (files) => {
+    const incoming = Array.from(files);
+    const placeholders = incoming.map(f => ({
+      _key: `${f.name}-${Date.now()}-${Math.random()}`,
+      name: f.name, uploading: true, error: null,
+    }));
+    setAttachments(prev => [...prev, ...placeholders]);
+    await Promise.all(incoming.map(async (file, idx) => {
+      const key = placeholders[idx]._key;
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res  = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        setAttachments(prev => prev.map(a =>
+          a._key === key ? { _key: key, name: data.name, url: data.url, size: data.size, uploading: false, error: null } : a
+        ));
+      } catch (err) {
+        setAttachments(prev => prev.map(a =>
+          a._key === key ? { ...a, uploading: false, error: err.message } : a
+        ));
+      }
+    }));
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const removeAttachment = async (key) => {
+    const att = attachments.find(a => a._key === key);
+    setAttachments(prev => prev.filter(a => a._key !== key));
+    if (att?.url) {
+      const filename = att.url.split('/').pop();
+      await fetch(`/api/upload/${filename}`, { method: 'DELETE' });
+    }
+  };
+
+  const save = async () => {
+    if (!title.trim() || saving) return;
+    setSaving(true);
+    const ready = attachments
+      .filter(a => !a.uploading && !a.error && a.url)
+      .map(({ name, url, size }) => ({ name, url, size }));
+    await onUpdateTask(task.id, { title: title.trim(), description: desc.trim(), priority, attachments: ready });
+    setSaving(false);
+    setEditing(false);
+  };
+
+  const cancelEdit = () => {
+    setTitle(task?.title || '');
+    setDesc(task?.description || '');
+    setPriority(task?.priority || 3);
+    setAttachments((task?.attachments || []).map((a, i) => ({ ...a, _key: `e${i}` })));
+    setEditing(false);
+  };
+
+  const uploading = attachments.some(a => a.uploading);
+  const pm = PRIORITY_META[editing ? priority : (task?.priority || 3)] || PRIORITY_META[5];
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={editing ? undefined : onClose}>
       <div
         className="modal-box animate-in"
         onClick={e => e.stopPropagation()}
-        style={{ width: 440, maxWidth: '92vw', textAlign: 'left', padding: 28 }}
+        style={{ width: 460, maxWidth: '92vw', textAlign: 'left', padding: 28 }}
       >
-        {/* Header: project icon + name + close */}
+        {/* Header */}
         <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:18 }}>
           {project?.iconUrl
             ? <img src={project.iconUrl} alt="" style={{ width:34, height:34, borderRadius:8, objectFit:'cover', flexShrink:0 }} />
@@ -64,41 +131,113 @@ function TaskDetailModal({ entry, task, project, onClose }) {
               </div>
           }
           <div style={{ flex:1, minWidth:0 }}>
-            <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:2 }}>{project?.name}</div>
-            <div style={{ fontSize:18, fontWeight:700, color:'var(--text)', lineHeight:1.25 }}>{task?.title}</div>
+            <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:4 }}>{project?.name}</div>
+            {editing
+              ? <input
+                  autoFocus
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') cancelEdit(); }}
+                  style={{ width:'100%', background:'var(--bg)', border:'1px solid rgba(0,0,0,0.15)', borderRadius:8, padding:'7px 10px', fontSize:15, fontWeight:700, fontFamily:'inherit', color:'var(--text)', outline:'none' }}
+                />
+              : <div style={{ fontSize:18, fontWeight:700, color:'var(--text)', lineHeight:1.25 }}>{task?.title}</div>
+            }
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--text-muted)', padding:'0 2px', lineHeight:1, flexShrink:0, marginTop:-2 }}>×</button>
+          <div style={{ display:'flex', gap:4, flexShrink:0, marginTop:-2 }}>
+            {!editing && (
+              <button
+                onClick={() => setEditing(true)}
+                title="Edit task"
+                style={{ background:'var(--bg)', border:'1px solid var(--border)', borderRadius:7, cursor:'pointer', padding:'5px 8px', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-muted)', transition:'color .12s, background .12s' }}
+                onMouseEnter={e => { e.currentTarget.style.color='var(--text)'; e.currentTarget.style.background='#eeede9'; }}
+                onMouseLeave={e => { e.currentTarget.style.color='var(--text-muted)'; e.currentTarget.style.background='var(--bg)'; }}
+              >
+                <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
+                  <path d="M8.5 1.5a1.207 1.207 0 011.707 1.707L3.5 9.914 1 10.5l.586-2.5L8.5 1.5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+            <button onClick={editing ? cancelEdit : onClose} style={{ background:'none', border:'none', cursor:'pointer', fontSize:22, color:'var(--text-muted)', padding:'0 2px', lineHeight:1 }}>×</button>
+          </div>
         </div>
 
-        {/* Meta chips: time range + duration + priority + status */}
+        {/* Meta chips */}
         <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', marginBottom:16 }}>
           <span style={{ fontSize:12, color:'var(--text-muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:6, padding:'3px 9px' }}>
             {formatHour(entry.startHour)} – {formatHour(entry.endHour)} · {formatDuration(entry.startHour, entry.endHour)}
           </span>
-          <span style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:6, background:pm.bg+'22', color:pm.bg, border:`1px solid ${pm.bg}44` }}>
-            {pm.label}
-          </span>
-          {entry.status === 'done' && (
+          {editing
+            ? [1,2,3,4,5].map(p => {
+                const m = PRIORITY_META[p];
+                return (
+                  <button key={p}
+                    onClick={() => setPriority(p)}
+                    style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:6, border:`1px solid ${m.bg}44`, cursor:'pointer', fontFamily:'inherit', transition:'all .12s',
+                      background: priority === p ? m.bg : m.bg+'22', color: priority === p ? '#fff' : m.bg }}
+                  >{m.label}</button>
+                );
+              })
+            : <span style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:6, background:pm.bg+'22', color:pm.bg, border:`1px solid ${pm.bg}44` }}>{pm.label}</span>
+          }
+          {!editing && entry.status === 'done' && (
             <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:6, background:'#d1fae5', color:'#059669', border:'1px solid #a7f3d0' }}>✓ Completed</span>
           )}
-          {entry.status === 'failed' && (
+          {!editing && entry.status === 'failed' && (
             <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:6, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}>✕ Not completed</span>
           )}
         </div>
 
         {/* Description */}
-        {task?.description && (
-          <div style={{ fontSize:13, color:'var(--text)', lineHeight:1.65, marginBottom:18, background:'var(--bg)', borderRadius:8, padding:'10px 13px', border:'1px solid var(--border)' }}>
-            {task.description}
-          </div>
-        )}
+        {editing
+          ? <textarea
+              value={desc}
+              onChange={e => setDesc(e.target.value)}
+              placeholder="Add a description…"
+              style={{ width:'100%', background:'var(--bg)', border:'1px solid rgba(0,0,0,0.12)', borderRadius:8, padding:'9px 12px', fontSize:13, fontFamily:'inherit', color:'var(--text)', outline:'none', resize:'none', height:80, marginBottom:14 }}
+            />
+          : task?.description && (
+              <div style={{ fontSize:13, color:'var(--text)', lineHeight:1.65, marginBottom:18, background:'var(--bg)', borderRadius:8, padding:'10px 13px', border:'1px solid var(--border)' }}>
+                {task.description}
+              </div>
+            )
+        }
 
         {/* Attachments */}
-        {task?.attachments?.length > 0 && (
+        {editing ? (
+          <div style={{ marginBottom:18 }}>
+            <div style={{ fontSize:10, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Attachments</div>
+            {attachments.length > 0 && (
+              <div style={{ display:'flex', flexDirection:'column', gap:5, marginBottom:8 }}>
+                {attachments.map(a => (
+                  <div key={a._key} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', borderRadius:9, background:'var(--bg)', border:`1px solid ${a.error ? '#fca5a5' : 'var(--border)'}`, fontSize:13 }}>
+                    <span style={{ fontSize:16, flexShrink:0 }}>
+                      {a.uploading ? <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>↻</span> : a.error ? '✕' : '📎'}
+                    </span>
+                    <span style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color: a.error ? '#ef4444' : 'var(--text)' }}>
+                      {a.error ? a.error : a.name}
+                    </span>
+                    {a.size && !a.uploading && !a.error && <span style={{ fontSize:11, color:'var(--text-muted)', flexShrink:0 }}>{formatSize(a.size)}</span>}
+                    {!a.uploading && (
+                      <button onClick={() => removeAttachment(a._key)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:'0 2px', fontSize:16, lineHeight:1, flexShrink:0 }}>×</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => fileRef.current?.click()}
+              style={{ display:'flex', alignItems:'center', gap:6, background:'none', border:'1.5px dashed rgba(0,0,0,0.1)', borderRadius:8, padding:'7px 12px', fontSize:12, color:'var(--text-muted)', cursor:'pointer', fontFamily:'inherit', transition:'border-color .15s' }}
+              onMouseEnter={e => e.currentTarget.style.borderColor='rgba(0,0,0,0.2)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor='rgba(0,0,0,0.1)'}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M9.5 5.5L5.5 9.5a2.5 2.5 0 01-3.5-3.5l4-4A1.5 1.5 0 018 3.5L4 7.5a.5.5 0 01-.7-.7L7 3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+              Attach file
+            </button>
+            <input ref={fileRef} type="file" multiple style={{ display:'none' }} onChange={e => handleFiles(e.target.files)} />
+          </div>
+        ) : task?.attachments?.length > 0 && (
           <div>
-            <div style={{ fontSize:10, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>
-              Attachments
-            </div>
+            <div style={{ fontSize:10, fontWeight:700, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Attachments</div>
             <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
               {task.attachments.map((a, i) =>
                 a.url
@@ -123,8 +262,23 @@ function TaskDetailModal({ entry, task, project, onClose }) {
           </div>
         )}
 
-        {!task?.description && !task?.attachments?.length && (
+        {!editing && !task?.description && !task?.attachments?.length && (
           <div style={{ fontSize:13, color:'var(--text-muted)', textAlign:'center', padding:'8px 0' }}>No description or attachments</div>
+        )}
+
+        {/* Edit mode save/cancel */}
+        {editing && (
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:4 }}>
+            <button className="btn-cancel" onClick={cancelEdit}>Cancel</button>
+            <button
+              className="btn-submit"
+              style={{ background: color, opacity: (uploading || saving) ? 0.6 : 1 }}
+              onClick={save}
+              disabled={uploading || saving}
+            >
+              {saving ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -285,7 +439,7 @@ function HourGrid({ entries, tasks, projects, selectedDate, onAddEntry, onUpdate
 }
 
 /* ── Calendar panel ────────────────────────────────────────── */
-export default function CalendarPanel({ entries, tasks, projects, onAddEntry, onUpdateEntry, onRemoveEntry, username, onLogout }) {
+export default function CalendarPanel({ entries, tasks, projects, onAddEntry, onUpdateEntry, onRemoveEntry, onUpdateTask, username, onLogout }) {
   const currentToday = getToday();
   const [selectedDate,   setSelectedDate]   = useState(currentToday);
   const [weekOffset,     setWeekOffset]     = useState(0);
@@ -390,6 +544,7 @@ export default function CalendarPanel({ entries, tasks, projects, onAddEntry, on
         <TaskDetailModal
           entry={detailEntry} task={detailTask} project={detailProject}
           onClose={() => setDetailEntryId(null)}
+          onUpdateTask={onUpdateTask}
         />
       )}
     </div>
