@@ -54,7 +54,7 @@ function TaskCard({ task, project, onEdit, onDelete }) {
           className="task-action-btn task-action-btn-delete"
           title="Delete task"
           onMouseDown={e => e.stopPropagation()}
-          onClick={e => { e.stopPropagation(); onDelete(task.id); }}
+          onClick={e => { e.stopPropagation(); if (window.confirm(`Delete "${task.title}"?`)) onDelete(task.id); }}
         >
           <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
             <path d="M2 3h8M5 3V2h2v1M4.5 5v4M7.5 5v4M3 3l.5 6.5a.5.5 0 00.5.5h4a.5.5 0 00.5-.5L9 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>

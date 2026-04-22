@@ -188,12 +188,12 @@ body{background:var(--bg);color:var(--text)}
 
 /* ── MOBILE ── */
 @media (max-width: 768px) {
-  html,body{height:100%;overflow:hidden}
+  html,body{height:100%;overflow:hidden;background:#0d0d0c}
 
   .app{
     flex-direction:column;
+    height:100vh; /* fallback for browsers without dvh */
     height:100dvh;
-    height:100vh; /* fallback */
     overflow:hidden;
   }
 
