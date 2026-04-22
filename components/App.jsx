@@ -218,6 +218,14 @@ export default function App() {
           )}
         </button>
       </nav>
+      {/* Paints over the iOS home-indicator safe area so it matches the tab bar */}
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0,
+        height: 'env(safe-area-inset-bottom, 0px)',
+        background: '#0d0d0c',
+        zIndex: 9999,
+        pointerEvents: 'none',
+      }} />
     </div>
   );
 }

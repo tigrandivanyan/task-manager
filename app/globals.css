@@ -213,8 +213,7 @@ body{background:var(--bg);color:var(--text)}
     flex-shrink:0;
     background:#0d0d0c;
     border-top:1px solid rgba(255,255,255,.09);
-    height:calc(var(--tab-h) + env(safe-area-inset-bottom, 0px));
-    padding-bottom:env(safe-area-inset-bottom, 0px);
+    height:var(--tab-h);
   }
   .mobile-tab{
     flex:1;display:flex;flex-direction:column;align-items:center;
