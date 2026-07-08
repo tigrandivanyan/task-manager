@@ -18,9 +18,10 @@ export async function POST(req) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   await connectDB();
-  const { projectId, title, description, priority, attachments } = await req.json();
+  const { projectId, title, description, priority, attachments, assigneeIds } = await req.json();
   const task = await Task.create({
     userId: session.userId, projectId, title, description, priority, attachments,
+    assigneeIds: Array.isArray(assigneeIds) && assigneeIds.length ? assigneeIds : [session.userId],
   });
   return NextResponse.json(serialize(task), { status: 201 });
 }

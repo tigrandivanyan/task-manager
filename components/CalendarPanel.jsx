@@ -3,15 +3,9 @@ import { useState, useEffect, useRef } from 'react';
 import {
   HOUR_HEIGHT, DAY_START, DAY_END, HOURS,
   DAY_NAMES, MONTH_NAMES, PRIORITY_META,
-  formatHour, addDays, parseDate,
+  formatHour, formatDuration, addDays, parseDate,
   today as getToday, getNowHour,
 } from '@/lib/constants';
-
-const formatDuration = (s, e) => {
-  const mins = Math.round((e - s) * 60);
-  const h = Math.floor(mins / 60), m = mins % 60;
-  return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
-};
 
 const formatSize = (bytes) => {
   if (!bytes) return '';
@@ -44,16 +38,18 @@ function computeLayout(dayEntries) {
 }
 
 /* ── Task detail modal ─────────────────────────────────────── */
-function TaskDetailModal({ entry, task, project, onClose, onUpdateTask }) {
+function TaskDetailModal({ entry, task, project, users, onClose, onUpdateTask }) {
   const color = project?.color || '#8b5cf6';
 
   const [editing,     setEditing]     = useState(false);
   const [title,       setTitle]       = useState(task?.title || '');
   const [desc,        setDesc]        = useState(task?.description || '');
   const [priority,    setPriority]    = useState(task?.priority || 3);
+  const [assigneeIds, setAssigneeIds] = useState(task?.assigneeIds || []);
   const [attachments, setAttachments] = useState(
     () => (task?.attachments || []).map((a, i) => ({ ...a, _key: `e${i}` }))
   );
+  const assignees = (task?.assigneeIds || []).map(id => users?.find(u => u.id === id)).filter(Boolean);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
 
@@ -99,7 +95,7 @@ function TaskDetailModal({ entry, task, project, onClose, onUpdateTask }) {
     const ready = attachments
       .filter(a => !a.uploading && !a.error && a.url)
       .map(({ name, url, size }) => ({ name, url, size }));
-    await onUpdateTask(task.id, { title: title.trim(), description: desc.trim(), priority, attachments: ready });
+    await onUpdateTask(task.id, { title: title.trim(), description: desc.trim(), priority, attachments: ready, assigneeIds });
     setSaving(false);
     setEditing(false);
   };
@@ -108,6 +104,7 @@ function TaskDetailModal({ entry, task, project, onClose, onUpdateTask }) {
     setTitle(task?.title || '');
     setDesc(task?.description || '');
     setPriority(task?.priority || 3);
+    setAssigneeIds(task?.assigneeIds || []);
     setAttachments((task?.attachments || []).map((a, i) => ({ ...a, _key: `e${i}` })));
     setEditing(false);
   };
@@ -179,11 +176,31 @@ function TaskDetailModal({ entry, task, project, onClose, onUpdateTask }) {
               })
             : <span style={{ fontSize:11, fontWeight:700, padding:'3px 9px', borderRadius:6, background:pm.bg+'22', color:pm.bg, border:`1px solid ${pm.bg}44` }}>{pm.label}</span>
           }
+          {editing
+            ? (users || []).map(u => {
+                const active = assigneeIds.includes(u.id);
+                return (
+                  <button key={u.id}
+                    onClick={() => setAssigneeIds(prev => prev.includes(u.id) ? prev.filter(id => id !== u.id) : [...prev, u.id])}
+                    style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:6, border:'1px solid var(--border)', cursor:'pointer', fontFamily:'inherit', transition:'all .12s',
+                      background: active ? '#8b5cf6' : 'var(--bg)', color: active ? '#fff' : 'var(--text-muted)', borderColor: active ? 'transparent' : 'var(--border)' }}
+                  >{u.username}</button>
+                );
+              })
+            : assignees.map(a => (
+                <span key={a.id} style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:6, background:'var(--bg)', color:'var(--text-muted)', border:'1px solid var(--border)' }}>👤 {a.username}</span>
+              ))
+          }
           {!editing && entry.status === 'done' && (
             <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:6, background:'#d1fae5', color:'#059669', border:'1px solid #a7f3d0' }}>✓ Completed</span>
           )}
           {!editing && entry.status === 'failed' && (
             <span style={{ fontSize:11, fontWeight:600, padding:'3px 9px', borderRadius:6, background:'#fef2f2', color:'#dc2626', border:'1px solid #fecaca' }}>✕ Not completed</span>
+          )}
+          {!editing && entry.status === 'done' && entry.actualStartHour != null && entry.actualEndHour != null && (
+            <span style={{ fontSize:11, color:'var(--text-muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:6, padding:'3px 9px' }}>
+              Logged {formatHour(entry.actualStartHour)} – {formatHour(entry.actualEndHour)} · {formatDuration(entry.actualStartHour, entry.actualEndHour)}
+            </span>
           )}
         </div>
 
@@ -286,13 +303,15 @@ function TaskDetailModal({ entry, task, project, onClose, onUpdateTask }) {
 }
 
 /* ── Calendar task block ───────────────────────────────────── */
-function CalendarTaskBlock({ entry, task, project, layout, onUpdate, onRemove, onShowDetail }) {
+function CalendarTaskBlock({ entry, task, project, users, layout, onUpdate, onRemove, onShowDetail }) {
   const moveRef    = useRef({ moved: false, startX: 0, startY: 0 });
   const color      = project?.color || '#8b5cf6';
   const top        = (entry.startHour - DAY_START) * HOUR_HEIGHT;
   const height     = Math.max((entry.endHour - entry.startHour) * HOUR_HEIGHT, 20);
   const isSmall    = height < 52;
   const isTiny     = height < 28;
+  const assignees  = (task?.assigneeIds || []).map(id => users?.find(u => u.id === id)).filter(Boolean);
+  const assigneeLabel = assignees.map(a => a.username).join(', ');
   const { col = 0, numCols = 1 } = layout || {};
   const widthPct   = 100 / numCols;
   const leftPct    = col * widthPct;
@@ -347,12 +366,20 @@ function CalendarTaskBlock({ entry, task, project, layout, onUpdate, onRemove, o
       style={{ top, height, background: color, left: `calc(${leftPct}% + 2px)`, width: `calc(${widthPct}% - 4px)`, right: 'auto', cursor: isResolved ? 'pointer' : 'grab' }}
       onMouseDown={handleMouseDown}
     >
-      <div className="cal-task-title" style={{ fontSize: isTiny ? 9 : isSmall ? 10 : 12 }}>{task?.title}</div>
+      <div className="cal-task-title" style={{ fontSize: isTiny ? 9 : isSmall ? 10 : 12 }}>
+        {task?.title}
+        {assignees.length > 0 && isSmall && !isTiny && (
+          <span className="cal-task-assignee-inline" title={`Assigned to ${assigneeLabel}`}> · 👤 {assigneeLabel}</span>
+        )}
+      </div>
       {!isTiny && (
         <div className="cal-task-time">
           {formatHour(entry.startHour)} – {formatHour(entry.endHour)}
           <span className="cal-task-dur"> · {formatDuration(entry.startHour, entry.endHour)}</span>
         </div>
+      )}
+      {assignees.length > 0 && !isSmall && (
+        <div className="cal-task-assignee" title={`Assigned to ${assigneeLabel}`}>👤 {assigneeLabel}</div>
       )}
       {entry.status === 'done'   && <div className="cal-task-badge cal-task-badge-done">✓</div>}
       {entry.status === 'failed' && <div className="cal-task-badge cal-task-badge-fail">✕</div>}
@@ -365,7 +392,7 @@ function CalendarTaskBlock({ entry, task, project, layout, onUpdate, onRemove, o
 }
 
 /* ── Hour grid ─────────────────────────────────────────────── */
-function HourGrid({ entries, tasks, projects, selectedDate, onAddEntry, onUpdateEntry, onRemoveEntry, onShowDetail }) {
+function HourGrid({ entries, tasks, projects, users, selectedDate, onAddEntry, onUpdateEntry, onRemoveEntry, onShowDetail }) {
   const gridRef = useRef(null);
   const [ghost, setGhost] = useState(null);
   const [nowHour, setNowHour] = useState(getNowHour);
@@ -397,7 +424,7 @@ function HourGrid({ entries, tasks, projects, selectedDate, onAddEntry, onUpdate
         e.preventDefault(); setGhost(null);
         const taskId = e.dataTransfer.getData('taskId');
         if (!taskId) return;
-        if (entries.some(en => en.taskId === taskId)) return;
+        if (entries.some(en => en.taskId === taskId && en.status !== 'failed')) return;
         const h = getHour(e.clientY);
         onAddEntry({ taskId, date: selectedDate, startHour: h, endHour: Math.min(DAY_END, h + 1) });
       }}
@@ -426,7 +453,7 @@ function HourGrid({ entries, tasks, projects, selectedDate, onAddEntry, onUpdate
           const project = projects.find(p => p.id === task?.projectId);
           return (
             <CalendarTaskBlock
-              key={en.id} entry={en} task={task} project={project}
+              key={en.id} entry={en} task={task} project={project} users={users}
               layout={layout[en.id]}
               onUpdate={onUpdateEntry} onRemove={onRemoveEntry}
               onShowDetail={onShowDetail}
@@ -439,7 +466,7 @@ function HourGrid({ entries, tasks, projects, selectedDate, onAddEntry, onUpdate
 }
 
 /* ── Calendar panel ────────────────────────────────────────── */
-export default function CalendarPanel({ entries, tasks, projects, onAddEntry, onUpdateEntry, onRemoveEntry, onUpdateTask, username, onLogout }) {
+export default function CalendarPanel({ entries, tasks, projects, users, onAddEntry, onUpdateEntry, onRemoveEntry, onUpdateTask, username, onLogout, onOpenDashboard }) {
   const currentToday = getToday();
   const [selectedDate,   setSelectedDate]   = useState(currentToday);
   const [weekOffset,     setWeekOffset]     = useState(0);
@@ -509,6 +536,18 @@ export default function CalendarPanel({ entries, tasks, projects, onAddEntry, on
           <div style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.35)', marginBottom:7, paddingLeft:4, letterSpacing:'.02em', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {username}
           </div>
+          <button onClick={onOpenDashboard} style={{
+            display:'flex', alignItems:'center', gap:6, width:'100%',
+            background:'none', border:'none', cursor:'pointer', padding:'6px 4px',
+            borderRadius:7, color:'rgba(255,255,255,0.35)', fontSize:12, fontFamily:'inherit',
+            fontWeight:500, transition:'background .12s, color .12s', textAlign:'left',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.06)'; e.currentTarget.style.color='rgba(255,255,255,0.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background='none'; e.currentTarget.style.color='rgba(255,255,255,0.35)'; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2.5 10.5V6M6.5 10.5V2.5M10.5 10.5V7.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Dashboard
+          </button>
           <button onClick={onLogout} style={{
             display:'flex', alignItems:'center', gap:6, width:'100%',
             background:'none', border:'none', cursor:'pointer', padding:'6px 4px',
@@ -531,7 +570,7 @@ export default function CalendarPanel({ entries, tasks, projects, onAddEntry, on
         </div>
         <div className="hour-grid-container">
           <HourGrid
-            entries={entries} tasks={tasks} projects={projects}
+            entries={entries} tasks={tasks} projects={projects} users={users}
             selectedDate={selectedDate}
             onAddEntry={onAddEntry} onUpdateEntry={onUpdateEntry} onRemoveEntry={onRemoveEntry}
             onShowDetail={setDetailEntryId}
@@ -542,7 +581,7 @@ export default function CalendarPanel({ entries, tasks, projects, onAddEntry, on
       {/* Task detail modal */}
       {detailEntry && detailTask && (
         <TaskDetailModal
-          entry={detailEntry} task={detailTask} project={detailProject}
+          entry={detailEntry} task={detailTask} project={detailProject} users={users}
           onClose={() => setDetailEntryId(null)}
           onUpdateTask={onUpdateTask}
         />

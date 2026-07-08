@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
-import { formatHour, PRIORITY_META, PROJECT_COLORS, PROJECT_EMOJIS } from '@/lib/constants';
+import { formatHour, formatDuration, timeStrToHour, PRIORITY_META, PROJECT_COLORS, PROJECT_EMOJIS } from '@/lib/constants';
 
 const formatSize = (bytes) => {
   if (!bytes) return '';
@@ -14,7 +14,22 @@ function PriorityBadge({ priority }) {
   return <span className="task-priority" style={{ background: p.bg+'22', color: p.bg, border:`1px solid ${p.bg}44` }}>{p.label}</span>;
 }
 
-function TaskCard({ task, project, onEdit, onDelete }) {
+function AssigneeBadges({ assigneeIds, users }) {
+  const assignees = (assigneeIds || []).map(id => users.find(u => u.id === id)).filter(Boolean);
+  if (!assignees.length) return null;
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginTop:4 }}>
+      {assignees.map(a => (
+        <span key={a.id} className="task-assignee" title={`Assigned to ${a.username}`}
+          style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, color:'var(--text-muted)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:6, padding:'2px 7px' }}>
+          👤 {a.username}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function TaskCard({ task, project, users, onEdit, onDelete }) {
   return (
     <div
       className="task-card"
@@ -26,6 +41,7 @@ function TaskCard({ task, project, onEdit, onDelete }) {
       <div style={{ flex:1, minWidth:0 }}>
         <div className="task-title">{task.title}</div>
         {task.description && <div className="task-desc">{task.description}</div>}
+        <AssigneeBadges assigneeIds={task.assigneeIds} users={users} />
         {task.attachments?.length > 0 && (
           <div className="task-attachments">
             {task.attachments.map((a, i) =>
@@ -68,14 +84,37 @@ function TaskCard({ task, project, onEdit, onDelete }) {
   );
 }
 
-function EditTaskModal({ task, projectColor, onSave, onClose }) {
-  const [title,    setTitle]    = useState(task.title);
-  const [desc,     setDesc]     = useState(task.description || '');
-  const [priority, setPriority] = useState(task.priority || 3);
+function AssigneePicker({ users, value, onChange }) {
+  const toggle = (id) => {
+    onChange(value.includes(id) ? value.filter(v => v !== id) : [...value, id]);
+  };
+  if (!users.length) {
+    return <div style={{ fontSize:12, color:'var(--text-muted)' }}>No users available</div>;
+  }
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+      {users.map(u => {
+        const active = value.includes(u.id);
+        return (
+          <button key={u.id} type="button" onClick={() => toggle(u.id)}
+            className={`assignee-chip${active ? ' active' : ''}`}>
+            {u.username}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function EditTaskModal({ task, projectColor, users, onSave, onClose }) {
+  const [title,       setTitle]       = useState(task.title);
+  const [desc,        setDesc]        = useState(task.description || '');
+  const [priority,    setPriority]    = useState(task.priority || 3);
+  const [assigneeIds, setAssigneeIds] = useState(task.assigneeIds || []);
 
   const submit = () => {
     if (!title.trim()) return;
-    onSave(task.id, { title: title.trim(), description: desc.trim(), priority });
+    onSave(task.id, { title: title.trim(), description: desc.trim(), priority, assigneeIds });
     onClose();
   };
 
@@ -126,6 +165,11 @@ function EditTaskModal({ task, projectColor, onSave, onClose }) {
           </div>
         </div>
 
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:10, fontWeight:600, letterSpacing:'.08em', textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Assignees</div>
+          <AssigneePicker users={users} value={assigneeIds} onChange={setAssigneeIds} />
+        </div>
+
         <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
           <button className="btn-cancel" onClick={onClose}>Cancel</button>
           <button className="btn-submit" style={{ background: projectColor || 'var(--text)' }} onClick={submit}>Save changes</button>
@@ -135,10 +179,11 @@ function EditTaskModal({ task, projectColor, onSave, onClose }) {
   );
 }
 
-function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
+function CreateTaskForm({ projectId, projectColor, users, currentUser, onAdd, onCancel }) {
   const [title,       setTitle]       = useState('');
   const [desc,        setDesc]        = useState('');
   const [priority,    setPriority]    = useState(3);
+  const [assigneeIds, setAssigneeIds] = useState(currentUser?.userId ? [currentUser.userId] : []);
   const [attachments, setAttachments] = useState([]);
   const fileRef = useRef(null);
 
@@ -184,7 +229,7 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
     const ready = attachments
       .filter(a => !a.uploading && !a.error && a.url)
       .map(({ name, url, size }) => ({ name, url, size }));
-    onAdd({ projectId, title: title.trim(), description: desc.trim(), priority, attachments: ready });
+    onAdd({ projectId, title: title.trim(), description: desc.trim(), priority, attachments: ready, assigneeIds });
     onCancel();
   };
 
@@ -201,6 +246,10 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
           return <button key={p} className={`priority-btn${priority===p?' active':''}`}
             style={priority===p?{background:pm.bg}:{}} onClick={()=>setPriority(p)}>{pm.label}</button>;
         })}
+      </div>
+
+      <div className="task-form-row">
+        <AssigneePicker users={users} value={assigneeIds} onChange={setAssigneeIds} />
       </div>
 
       {attachments.length > 0 && (
@@ -252,7 +301,7 @@ function CreateTaskForm({ projectId, projectColor, onAdd, onCancel }) {
   );
 }
 
-function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask, onUpdateTask, onDeleteTask, onDeleteProject }) {
+function ProjectGroup({ project, tasks, calendarTaskIds, users, currentUser, onAddTask, onUpdateTask, onDeleteTask, onDeleteProject }) {
   const storageKey = `project-expanded-${project.id}`;
   const [expanded,    setExpanded]    = useState(() => {
     try { return localStorage.getItem(storageKey) === 'true'; } catch { return false; }
@@ -302,13 +351,13 @@ function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask, onUpdateTask
           {visibleTasks.length === 0 && !creating && <div className="empty-tasks">No tasks — add one below</div>}
           {visibleTasks.map(task => (
             <TaskCard
-              key={task.id} task={task} project={project}
+              key={task.id} task={task} project={project} users={users}
               onEdit={setEditingTask}
               onDelete={onDeleteTask}
             />
           ))}
           {creating
-            ? <CreateTaskForm projectId={project.id} projectColor={project.color} onAdd={onAddTask} onCancel={() => setCreating(false)} />
+            ? <CreateTaskForm projectId={project.id} projectColor={project.color} users={users} currentUser={currentUser} onAdd={onAddTask} onCancel={() => setCreating(false)} />
             : <button className="btn-add-task" onClick={() => setCreating(true)}>
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
                 Add task
@@ -321,6 +370,7 @@ function ProjectGroup({ project, tasks, calendarTaskIds, onAddTask, onUpdateTask
         <EditTaskModal
           task={editingTask}
           projectColor={project.color}
+          users={users}
           onSave={onUpdateTask}
           onClose={() => setEditingTask(null)}
         />
@@ -447,7 +497,25 @@ function CreateProjectForm({ onAdd, onCancel }) {
 }
 
 function NotificationBar({ pendingEntries, tasks, projects, onResolve }) {
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [fromTime, setFromTime] = useState('');
+  const [toTime,   setToTime]   = useState('');
+
   if (!pendingEntries.length) return null;
+
+  const startConfirm = (en) => {
+    setConfirmingId(en.id);
+    setFromTime(formatHour(en.startHour));
+    setToTime(formatHour(en.endHour));
+  };
+
+  const submitConfirm = (en) => {
+    const actualStartHour = timeStrToHour(fromTime);
+    const actualEndHour   = timeStrToHour(toTime);
+    onResolve(en.id, 'done', { actualStartHour, actualEndHour });
+    setConfirmingId(null);
+  };
+
   return (
     <div className="notif-bar visible">
       <div className="notif-header">
@@ -459,15 +527,33 @@ function NotificationBar({ pendingEntries, tasks, projects, onResolve }) {
         {pendingEntries.map(en => {
           const task    = tasks.find(t => t.id === en.taskId);
           const project = projects.find(p => p.id === task?.projectId);
+          const confirming = confirmingId === en.id;
           return (
-            <div key={en.id} className="notif-item">
+            <div key={en.id} className="notif-item" style={{ flexWrap: confirming ? 'wrap' : 'nowrap' }}>
               <div className="notif-dot" style={{ background: project?.color || '#ccc' }} />
               <div className="notif-title">{task?.title || 'Unknown task'}</div>
               <div className="notif-time">{formatHour(en.startHour)}–{formatHour(en.endHour)}</div>
-              <div className="notif-btns">
-                <button className="notif-btn-done" onClick={() => onResolve(en.id, 'done')}>✓ Done</button>
-                <button className="notif-btn-fail" onClick={() => onResolve(en.id, 'failed')}>✕ Not done</button>
-              </div>
+              {confirming ? (
+                <div className="notif-btns" style={{ alignItems:'center' }}>
+                  <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)}
+                    style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontFamily:'inherit' }} />
+                  <span style={{ color:'var(--text-muted)', fontSize:12 }}>–</span>
+                  <input type="time" value={toTime} onChange={e => setToTime(e.target.value)}
+                    style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontFamily:'inherit' }} />
+                  {fromTime && toTime && timeStrToHour(toTime) > timeStrToHour(fromTime) && (
+                    <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                      ({formatDuration(timeStrToHour(fromTime), timeStrToHour(toTime))})
+                    </span>
+                  )}
+                  <button className="notif-btn-done" onClick={() => submitConfirm(en)}>✓ Confirm</button>
+                  <button className="notif-btn-fail" onClick={() => setConfirmingId(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div className="notif-btns">
+                  <button className="notif-btn-done" onClick={() => startConfirm(en)}>✓ Done</button>
+                  <button className="notif-btn-fail" onClick={() => onResolve(en.id, 'failed')}>✕ Not done</button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -476,11 +562,18 @@ function NotificationBar({ pendingEntries, tasks, projects, onResolve }) {
   );
 }
 
-export default function TaskPanel({ projects, tasks, calendarTaskIds, onAddTask, onUpdateTask, onDeleteTask, onAddProject, onDeleteProject, pendingEntries, onResolve }) {
+export default function TaskPanel({ projects, tasks, calendarTaskIds, users, currentUser, onAddTask, onUpdateTask, onDeleteTask, onAddProject, onDeleteProject, pendingEntries, onResolve, onLogout }) {
   const [creatingProject, setCreatingProject] = useState(false);
 
   return (
     <div className="task-panel">
+      <div className="mobile-user-bar">
+        <span className="mobile-username">{currentUser?.username}</span>
+        <button className="mobile-logout-btn" onClick={onLogout}>
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1.5 6.5h8M7 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 2H2a.5.5 0 00-.5.5v8A.5.5 0 002 11h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+          Sign out
+        </button>
+      </div>
       <NotificationBar pendingEntries={pendingEntries} tasks={tasks} projects={projects} onResolve={onResolve} />
       <div className="task-panel-header">
         <div>
@@ -504,7 +597,7 @@ export default function TaskPanel({ projects, tasks, calendarTaskIds, onAddTask,
         {projects.map(project => (
           <ProjectGroup
             key={project.id}
-            project={project} tasks={tasks} calendarTaskIds={calendarTaskIds}
+            project={project} tasks={tasks} calendarTaskIds={calendarTaskIds} users={users} currentUser={currentUser}
             onAddTask={onAddTask} onUpdateTask={onUpdateTask} onDeleteTask={onDeleteTask}
             onDeleteProject={onDeleteProject}
           />

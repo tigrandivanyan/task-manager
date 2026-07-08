@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import { getSession } from '@/lib/auth';
 import { serialize } from '@/lib/serialize';
 import Task from '@/lib/models/Task';
+import Entry from '@/lib/models/Entry';
 
 export async function PUT(req, { params }) {
   const session = await getSession();
@@ -15,6 +16,7 @@ export async function PUT(req, { params }) {
   if (body.title       !== undefined) allowed.title       = body.title;
   if (body.description !== undefined) allowed.description = body.description;
   if (body.priority    !== undefined) allowed.priority    = body.priority;
+  if (body.assigneeIds !== undefined) allowed.assigneeIds = Array.isArray(body.assigneeIds) ? body.assigneeIds : [];
   const task = await Task.findOneAndUpdate(
     { _id: id, userId: session.userId },
     { $set: allowed },
@@ -30,5 +32,6 @@ export async function DELETE(req, { params }) {
   await connectDB();
   const { id } = await params;
   await Task.deleteOne({ _id: id, userId: session.userId });
+  await Entry.deleteMany({ taskId: id, userId: session.userId });
   return NextResponse.json({ ok: true });
 }

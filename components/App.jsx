@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import CalendarPanel from './CalendarPanel';
 import TaskPanel from './TaskPanel';
 import LoginPage from './LoginPage';
+import Dashboard from './Dashboard';
 import { today as getToday, getNowHour } from '@/lib/constants';
 
 async function apiFetch(url, opts = {}) {
@@ -19,6 +20,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [tasks,    setTasks]    = useState([]);
   const [entries,  setEntries]  = useState([]);
+  const [users,    setUsers]    = useState([]);
 
   // Check auth on mount
   useEffect(() => {
@@ -30,12 +32,13 @@ export default function App() {
   // Load all data (stable reference — setters are stable)
   const loadAllData = useCallback(async () => {
     try {
-      const [p, t, e] = await Promise.all([
+      const [p, t, e, u] = await Promise.all([
         apiFetch('/api/projects'),
         apiFetch('/api/tasks'),
         apiFetch('/api/entries'),
+        apiFetch('/api/users'),
       ]);
-      setProjects(p); setTasks(t); setEntries(e);
+      setProjects(p); setTasks(t); setEntries(e); setUsers(u);
     } catch {}
   }, []);
 
@@ -129,6 +132,7 @@ export default function App() {
 
   const deleteTask = async (id) => {
     setTasks(prev => prev.filter(t => t.id !== id)); // optimistic
+    setEntries(prev => prev.filter(e => e.taskId !== id)); // optimistic
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
   };
 
@@ -142,16 +146,17 @@ export default function App() {
     await fetch(`/api/projects/${id}`, { method: 'DELETE' });
   };
 
-  const handleResolve = async (entryId, resolution) => {
-    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: resolution } : e));
+  const handleResolve = async (entryId, resolution, extra = {}) => {
+    setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: resolution, ...extra } : e));
     await fetch(`/api/entries/${entryId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: resolution }),
+      body: JSON.stringify({ status: resolution, ...extra }),
     });
   };
 
   const [mobileTab, setMobileTab] = useState('calendar');
+  const [showDashboard, setShowDashboard] = useState(false);
 
   // ── Render ───────────────────────────────────────────────
   if (user === undefined) return null; // loading
@@ -166,18 +171,19 @@ export default function App() {
     <div className="app">
       <div className={`mobile-panel${mobileTab === 'calendar' ? ' mobile-active' : ''}`}>
         <CalendarPanel
-          entries={entries} tasks={tasks} projects={projects}
+          entries={entries} tasks={tasks} projects={projects} users={users}
           onAddEntry={addEntry}
           onUpdateEntry={updateEntry}
           onRemoveEntry={removeEntry}
           onUpdateTask={updateTask}
           username={user.username}
           onLogout={handleLogout}
+          onOpenDashboard={() => setShowDashboard(true)}
         />
       </div>
       <div className={`mobile-panel${mobileTab === 'tasks' ? ' mobile-active' : ''}`}>
         <TaskPanel
-          projects={projects} tasks={tasks} calendarTaskIds={calendarTaskIds}
+          projects={projects} tasks={tasks} calendarTaskIds={calendarTaskIds} users={users} currentUser={user}
           onAddTask={addTask}
           onUpdateTask={updateTask}
           onDeleteTask={deleteTask}
@@ -185,6 +191,7 @@ export default function App() {
           onDeleteProject={deleteProject}
           pendingEntries={pendingEntries}
           onResolve={handleResolve}
+          onLogout={handleLogout}
         />
       </div>
 
@@ -217,6 +224,16 @@ export default function App() {
             <span className="tab-badge">{pendingEntries.length}</span>
           )}
         </button>
+        <button
+          role="tab" aria-selected={showDashboard}
+          className={`mobile-tab${showDashboard ? ' active' : ''}`}
+          onClick={() => setShowDashboard(true)}
+        >
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M4 17V10M11 17V5M18 17v-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>Dashboard</span>
+        </button>
       </nav>
       {/* Paints over the iOS home-indicator safe area so it matches the tab bar */}
       <div style={{
@@ -226,6 +243,12 @@ export default function App() {
         zIndex: 9999,
         pointerEvents: 'none',
       }} />
+      {showDashboard && (
+        <Dashboard
+          tasks={tasks} users={users} entries={entries}
+          onClose={() => setShowDashboard(false)}
+        />
+      )}
     </div>
   );
 }
