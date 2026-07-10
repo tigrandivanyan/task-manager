@@ -530,23 +530,29 @@ function NotificationBar({ pendingEntries, tasks, projects, onResolve }) {
           const confirming = confirmingId === en.id;
           return (
             <div key={en.id} className="notif-item" style={{ flexWrap: confirming ? 'wrap' : 'nowrap' }}>
-              <div className="notif-dot" style={{ background: project?.color || '#ccc' }} />
-              <div className="notif-title">{task?.title || 'Unknown task'}</div>
-              <div className="notif-time">{formatHour(en.startHour)}–{formatHour(en.endHour)}</div>
+              <div className="notif-item-top">
+                <div className="notif-dot" style={{ background: project?.color || '#ccc' }} />
+                <div className="notif-title">{task?.title || 'Unknown task'}</div>
+                <div className="notif-time">{formatHour(en.startHour)}–{formatHour(en.endHour)}</div>
+              </div>
               {confirming ? (
-                <div className="notif-btns" style={{ alignItems:'center' }}>
-                  <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)}
-                    style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontFamily:'inherit' }} />
-                  <span style={{ color:'var(--text-muted)', fontSize:12 }}>–</span>
-                  <input type="time" value={toTime} onChange={e => setToTime(e.target.value)}
-                    style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontFamily:'inherit' }} />
-                  {fromTime && toTime && timeStrToHour(toTime) > timeStrToHour(fromTime) && (
-                    <span style={{ fontSize:11, color:'var(--text-muted)' }}>
-                      ({formatDuration(timeStrToHour(fromTime), timeStrToHour(toTime))})
-                    </span>
-                  )}
-                  <button className="notif-btn-done" onClick={() => submitConfirm(en)}>✓ Confirm</button>
-                  <button className="notif-btn-fail" onClick={() => setConfirmingId(null)}>Cancel</button>
+                <div className="notif-confirm-row">
+                  <div className="notif-time-edit">
+                    <input type="time" value={fromTime} onChange={e => setFromTime(e.target.value)}
+                      style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontFamily:'inherit' }} />
+                    <span style={{ color:'var(--text-muted)', fontSize:12 }}>–</span>
+                    <input type="time" value={toTime} onChange={e => setToTime(e.target.value)}
+                      style={{ fontSize:12, padding:'4px 6px', borderRadius:6, border:'1px solid var(--border)', background:'var(--bg)', color:'var(--text)', fontFamily:'inherit' }} />
+                    {fromTime && toTime && timeStrToHour(toTime) > timeStrToHour(fromTime) && (
+                      <span style={{ fontSize:11, color:'var(--text-muted)' }}>
+                        ({formatDuration(timeStrToHour(fromTime), timeStrToHour(toTime))})
+                      </span>
+                    )}
+                  </div>
+                  <div className="notif-btns">
+                    <button className="notif-btn-done" onClick={() => submitConfirm(en)}>✓ Confirm</button>
+                    <button className="notif-btn-fail" onClick={() => setConfirmingId(null)}>Cancel</button>
+                  </div>
                 </div>
               ) : (
                 <div className="notif-btns">
