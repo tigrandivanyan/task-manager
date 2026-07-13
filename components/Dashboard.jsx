@@ -1,7 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { PRIORITY_META, addDays, today as getToday } from '@/lib/constants';
+import { PRIORITY_META, addDays, parseDate, formatDate, formatDuration, MONTH_NAMES, today as getToday } from '@/lib/constants';
 
 const Chart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
@@ -10,6 +10,7 @@ const COLOR_DONE      = '#0ca30c'; // good
 const COLOR_PENDING   = '#fab219'; // warning
 const COLOR_FAILED    = '#d03b3b'; // critical
 const COLOR_NEUTRAL   = '#b0ada6'; // unscheduled / not-done (app's --text-light token)
+const COLOR_ACTUAL    = '#8b5cf6'; // app brand accent — actual time worked
 const INK_MUTED       = '#9b9890';
 const INK_SECONDARY   = '#52514e';
 const GRID_LINE       = '#e6e4de';
@@ -37,6 +38,51 @@ function compactNumber(n) {
   return String(n);
 }
 
+function formatHours(h) {
+  if (!h) return '0h';
+  return formatDuration(0, h);
+}
+
+// Planned block length, regardless of outcome
+function plannedDuration(e) {
+  return Math.max(0, e.endHour - e.startHour);
+}
+
+// Actual time worked — the confirmed actual span if recorded, else the
+// planned span for older/quick-resolved done entries, else 0 (not done yet)
+function actualDuration(e) {
+  if (e.status !== 'done') return 0;
+  if (e.actualStartHour != null && e.actualEndHour != null) {
+    return Math.max(0, e.actualEndHour - e.actualStartHour);
+  }
+  return plannedDuration(e);
+}
+
+// Day/week/month bucketing — adapts to the selected range so a 7-day view
+// reads day-by-day while an all-time view reads month-by-month
+function getGranularity(startStr, endStr) {
+  const spanDays = (parseDate(endStr) - parseDate(startStr)) / 86400000;
+  if (spanDays <= 31) return 'day';
+  if (spanDays <= 180) return 'week';
+  return 'month';
+}
+
+function bucketKey(dateStr, granularity) {
+  if (granularity === 'day') return dateStr;
+  if (granularity === 'month') return dateStr.slice(0, 7);
+  const d = parseDate(dateStr);
+  const diffToMonday = (d.getDay() + 6) % 7; // days since most recent Monday
+  d.setDate(d.getDate() - diffToMonday);
+  return formatDate(d);
+}
+
+function bucketLabel(key, granularity) {
+  if (granularity === 'day') return key.slice(5);
+  if (granularity === 'week') return key.slice(5);
+  const [y, m] = key.split('-');
+  return `${MONTH_NAMES[Number(m) - 1].slice(0, 3)} ${y}`;
+}
+
 function StatTile({ label, value, sub, accent }) {
   return (
     <div className="dash-stat-tile">
@@ -47,9 +93,9 @@ function StatTile({ label, value, sub, accent }) {
   );
 }
 
-function ChartCard({ title, subtitle, children, legend }) {
+function ChartCard({ title, subtitle, children, legend, wide }) {
   return (
-    <div className="dash-card">
+    <div className={`dash-card${wide ? ' dash-card-wide' : ''}`}>
       <div className="dash-card-head">
         <div>
           <div className="dash-card-title">{title}</div>
@@ -162,6 +208,29 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
     return days.map(dt => ({ date: dt, count: countByDay.get(dt) || 0 }));
   }, [start, end, preset, filteredEntries, doneEntries]);
 
+  // ── Time spent vs. planned ──
+  const totalPlannedHours = filteredEntries.reduce((sum, e) => sum + plannedDuration(e), 0);
+  const totalActualHours  = filteredEntries.reduce((sum, e) => sum + actualDuration(e), 0);
+  const timeEfficiencyPct = totalPlannedHours ? Math.round((totalActualHours / totalPlannedHours) * 100) : null;
+
+  const timeGranularity = useMemo(() => getGranularity(start, end), [start, end]);
+
+  const timeSeries = useMemo(() => {
+    const buckets = new Map(); // key -> { planned, actual }
+    filteredEntries.forEach(e => {
+      const key = bucketKey(e.date, timeGranularity);
+      if (!buckets.has(key)) buckets.set(key, { planned: 0, actual: 0 });
+      const b = buckets.get(key);
+      b.planned += plannedDuration(e);
+      b.actual  += actualDuration(e);
+    });
+    return [...buckets.keys()]
+      .sort()
+      .slice(-60) // cap for readability on very wide ranges
+      .map(key => ({ key, label: bucketLabel(key, timeGranularity), ...buckets.get(key) }));
+  }, [filteredEntries, timeGranularity]);
+  const timeSeriesHasData = timeSeries.some(t => t.planned + t.actual > 0);
+
   const totalTasks = tasks.length;
 
   return (
@@ -201,6 +270,18 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
           <StatTile label="Completed" value={compactNumber(doneEntries.length)} accent={COLOR_DONE} sub={`in selected range`} />
           <StatTile label="Not completed" value={compactNumber(pendingEntries.length + failedEntries.length)} sub={`${pendingEntries.length} pending · ${failedEntries.length} failed`} />
           <StatTile label="Completion rate" value={completionRate === null ? '—' : `${completionRate}%`} sub="of resolved tasks" />
+        </div>
+
+        {/* Time KPI row */}
+        <div className="dash-kpi-row-3">
+          <StatTile label="Time planned" value={formatHours(totalPlannedHours)} sub="scheduled block length" />
+          <StatTile label="Time spent" value={formatHours(totalActualHours)} accent={COLOR_ACTUAL} sub="on completed tasks" />
+          <StatTile
+            label="Time efficiency"
+            value={timeEfficiencyPct === null ? '—' : `${timeEfficiencyPct}%`}
+            accent={timeEfficiencyPct === null ? undefined : (timeEfficiencyPct <= 100 ? COLOR_DONE : COLOR_FAILED)}
+            sub="actual vs. planned time"
+          />
         </div>
 
         {/* Charts */}
@@ -330,6 +411,42 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
                 }}
               />
             ) : <EmptyChart text="No completions in this range" />}
+          </ChartCard>
+
+          <ChartCard
+            title="Time spent vs. planned"
+            subtitle={
+              totalPlannedHours
+                ? `Planned ${formatHours(totalPlannedHours)} — actual ${formatHours(totalActualHours)} (${timeEfficiencyPct}% of planned), by ${timeGranularity}`
+                : `No scheduled time in this range, by ${timeGranularity}`
+            }
+            legend={<>
+              <LegendSwatch color={COLOR_NEUTRAL} label="Planned" />
+              <LegendSwatch color={COLOR_ACTUAL} label="Actual" />
+            </>}
+            wide
+          >
+            {timeSeriesHasData ? (
+              <Chart
+                type="bar"
+                height={280}
+                series={[
+                  { name: 'Planned', data: timeSeries.map(t => Number(t.planned.toFixed(2))) },
+                  { name: 'Actual', data: timeSeries.map(t => Number(t.actual.toFixed(2))) },
+                ]}
+                options={{
+                  chart: { toolbar: { show: false }, fontFamily: FONT },
+                  colors: [COLOR_NEUTRAL, COLOR_ACTUAL],
+                  plotOptions: { bar: { columnWidth: '55%', borderRadius: 4, borderRadiusApplication: 'end' } },
+                  xaxis: { categories: timeSeries.map(t => t.label), axisBorder: { color: GRID_LINE }, axisTicks: { show: false }, labels: { style: { colors: INK_MUTED, fontFamily: FONT }, rotate: 0 } },
+                  yaxis: { labels: { style: { colors: INK_MUTED, fontFamily: FONT }, formatter: (v) => `${v}h` } },
+                  grid: { borderColor: GRID_LINE, strokeDashArray: 0, yaxis: { lines: { show: true } }, xaxis: { lines: { show: false } } },
+                  legend: { show: false },
+                  dataLabels: { enabled: false },
+                  tooltip: { y: { formatter: (v) => formatHours(v) } },
+                }}
+              />
+            ) : <EmptyChart text="No scheduled time in this range" />}
           </ChartCard>
         </div>
       </div>
