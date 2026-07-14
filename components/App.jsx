@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import CalendarPanel from './CalendarPanel';
 import TaskPanel from './TaskPanel';
 import LoginPage from './LoginPage';
@@ -29,8 +29,15 @@ export default function App() {
       .then(u => setUser(u));
   }, []);
 
+  // Bumped by every local optimistic mutation. A background refetch that
+  // resolves after a newer mutation started is stale by definition (it can't
+  // reflect a write that hadn't happened yet when it was issued) — discard it
+  // instead of clobbering the optimistic state with old data.
+  const dataVersion = useRef(0);
+
   // Load all data (stable reference — setters are stable)
   const loadAllData = useCallback(async () => {
+    const versionAtStart = dataVersion.current;
     try {
       const [p, t, e, u] = await Promise.all([
         apiFetch('/api/projects'),
@@ -38,6 +45,7 @@ export default function App() {
         apiFetch('/api/entries'),
         apiFetch('/api/users'),
       ]);
+      if (dataVersion.current !== versionAtStart) return; // a mutation happened mid-fetch
       setProjects(p); setTasks(t); setEntries(e); setUsers(u);
     } catch {}
   }, []);
@@ -84,6 +92,7 @@ export default function App() {
           body: JSON.stringify({ status: 'pending' }),
         });
       });
+      dataVersion.current++;
       setEntries(prev => prev.map(en =>
         expired.find(e => e.id === en.id) ? { ...en, status: 'pending' } : en
       ));
@@ -100,12 +109,16 @@ export default function App() {
   };
 
   // ── Mutations ────────────────────────────────────────────
+  // Every mutation bumps dataVersion before touching local state, so any
+  // background refetch already in flight gets discarded instead of undoing it.
   const addEntry = async (data) => {
     const entry = await apiFetch('/api/entries', { method: 'POST', body: JSON.stringify(data) });
+    dataVersion.current++;
     setEntries(prev => [...prev, entry]);
   };
 
   const updateEntry = async (updated) => {
+    dataVersion.current++;
     setEntries(prev => prev.map(e => e.id === updated.id ? updated : e)); // optimistic
     await fetch(`/api/entries/${updated.id}`, {
       method: 'PUT',
@@ -115,22 +128,27 @@ export default function App() {
   };
 
   const removeEntry = async (id) => {
+    dataVersion.current++;
     setEntries(prev => prev.filter(e => e.id !== id)); // optimistic
     await fetch(`/api/entries/${id}`, { method: 'DELETE' });
   };
 
   const addTask = async (data) => {
     const task = await apiFetch('/api/tasks', { method: 'POST', body: JSON.stringify(data) });
+    dataVersion.current++;
     setTasks(prev => [...prev, task]);
   };
 
   const updateTask = async (id, data) => {
+    dataVersion.current++;
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t)); // optimistic
     const updated = await apiFetch(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    dataVersion.current++;
     setTasks(prev => prev.map(t => t.id === id ? updated : t));
   };
 
   const deleteTask = async (id) => {
+    dataVersion.current++;
     setTasks(prev => prev.filter(t => t.id !== id)); // optimistic
     setEntries(prev => prev.filter(e => e.taskId !== id)); // optimistic
     await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
@@ -138,15 +156,18 @@ export default function App() {
 
   const addProject = async (data) => {
     const project = await apiFetch('/api/projects', { method: 'POST', body: JSON.stringify(data) });
+    dataVersion.current++;
     setProjects(prev => [...prev, project]);
   };
 
   const deleteProject = async (id) => {
+    dataVersion.current++;
     setProjects(prev => prev.filter(p => p.id !== id)); // optimistic
     await fetch(`/api/projects/${id}`, { method: 'DELETE' });
   };
 
   const handleResolve = async (entryId, resolution, extra = {}) => {
+    dataVersion.current++;
     setEntries(prev => prev.map(e => e.id === entryId ? { ...e, status: resolution, ...extra } : e));
     await fetch(`/api/entries/${entryId}`, {
       method: 'PUT',
