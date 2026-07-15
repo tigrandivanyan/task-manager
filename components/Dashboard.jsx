@@ -231,6 +231,29 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
   }, [filteredEntries, timeGranularity]);
   const timeSeriesHasData = timeSeries.some(t => t.planned + t.actual > 0);
 
+  // ── Daily time worked — always per-day (unlike the adaptive chart above),
+  // so short and long ranges alike answer "how much did I work on day X" ──
+  const dailyTime = useMemo(() => {
+    const days = [];
+    const startDate = preset === 'all'
+      ? (filteredEntries.map(e => e.date).sort()[0] || end)
+      : start;
+    let cur = startDate;
+    let guard = 0;
+    while (cur <= end && guard < 120) {
+      days.push(cur);
+      cur = addDays(cur, 1);
+      guard++;
+    }
+    const hoursByDay = new Map();
+    filteredEntries.forEach(e => hoursByDay.set(e.date, (hoursByDay.get(e.date) || 0) + actualDuration(e)));
+    return days.map(dt => ({ date: dt, hours: hoursByDay.get(dt) || 0 }));
+  }, [start, end, preset, filteredEntries]);
+  const workingDays = dailyTime.filter(d => d.hours > 0);
+  const avgHoursPerWorkingDay = workingDays.length
+    ? workingDays.reduce((sum, d) => sum + d.hours, 0) / workingDays.length
+    : null;
+
   const totalTasks = tasks.length;
 
   return (
@@ -273,7 +296,7 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
         </div>
 
         {/* Time KPI row */}
-        <div className="dash-kpi-row-3">
+        <div className="dash-kpi-row dash-kpi-row-last">
           <StatTile label="Time planned" value={formatHours(totalPlannedHours)} sub="scheduled block length" />
           <StatTile label="Time spent" value={formatHours(totalActualHours)} accent={COLOR_ACTUAL} sub="on completed tasks" />
           <StatTile
@@ -281,6 +304,12 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
             value={timeEfficiencyPct === null ? '—' : `${timeEfficiencyPct}%`}
             accent={timeEfficiencyPct === null ? undefined : (timeEfficiencyPct <= 100 ? COLOR_DONE : COLOR_FAILED)}
             sub="actual vs. planned time"
+          />
+          <StatTile
+            label="Avg. time / working day"
+            value={avgHoursPerWorkingDay === null ? '—' : formatHours(avgHoursPerWorkingDay)}
+            accent={avgHoursPerWorkingDay === null ? undefined : COLOR_ACTUAL}
+            sub={workingDays.length ? `across ${workingDays.length} working day${workingDays.length === 1 ? '' : 's'}` : 'no working days in range'}
           />
         </div>
 
@@ -411,6 +440,43 @@ export default function Dashboard({ tasks, users, entries, onClose }) {
                 }}
               />
             ) : <EmptyChart text="No completions in this range" />}
+          </ChartCard>
+
+          <ChartCard
+            title="Daily time worked"
+            subtitle={
+              workingDays.length
+                ? `Actual hours logged per day — avg ${formatHours(avgHoursPerWorkingDay)} on working days`
+                : 'Actual hours logged per day'
+            }
+            wide
+          >
+            {workingDays.length ? (
+              <Chart
+                type="area"
+                height={260}
+                series={[{ name: 'Hours worked', data: dailyTime.map(d => Number(d.hours.toFixed(2))) }]}
+                options={{
+                  chart: { toolbar: { show: false }, fontFamily: FONT, zoom: { enabled: false } },
+                  colors: [COLOR_ACTUAL],
+                  stroke: { width: 2, curve: 'smooth' },
+                  fill: { type: 'gradient', gradient: { opacityFrom: 0.22, opacityTo: 0 } },
+                  markers: { size: 0 },
+                  xaxis: {
+                    categories: dailyTime.map(d => d.date),
+                    type: 'category',
+                    labels: { style: { colors: INK_MUTED, fontFamily: FONT }, rotate: 0,
+                      formatter: (v) => v ? v.slice(5) : v },
+                    tickAmount: Math.min(10, dailyTime.length - 1),
+                    axisBorder: { color: GRID_LINE }, axisTicks: { show: false },
+                  },
+                  yaxis: { labels: { style: { colors: INK_MUTED, fontFamily: FONT }, formatter: (v) => `${v}h` }, forceNiceScale: true, min: 0 },
+                  grid: { borderColor: GRID_LINE, xaxis: { lines: { show: false } } },
+                  dataLabels: { enabled: false },
+                  tooltip: { x: { format: 'yyyy-MM-dd' }, y: { formatter: (v) => formatHours(v) } },
+                }}
+              />
+            ) : <EmptyChart text="No time logged in this range" />}
           </ChartCard>
 
           <ChartCard
