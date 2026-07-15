@@ -11,12 +11,23 @@ export async function PUT(req, { params }) {
   await connectDB();
   const { id } = await params;
   const body = await req.json();
-  const entry = await Entry.findOneAndUpdate(
-    { _id: id, userId: session.userId },
-    { $set: body },
-    { new: true }
-  );
-  if (!entry) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // The auto-expiry checker marks overdue entries 'pending' from whatever the
+  // client last saw locally, which can be stale (backgrounded tab, another
+  // device, a slow timer). Guard this specific transition atomically so a
+  // stale client can never clobber an entry someone already resolved
+  // ('done'/'failed') back to 'pending'.
+  const query = { _id: id, userId: session.userId };
+  if (body.status === 'pending') query.status = null;
+
+  const entry = await Entry.findOneAndUpdate(query, { $set: body }, { new: true });
+  if (!entry) {
+    // Distinguish "doesn't exist" from "guard blocked a stale pending write"
+    // so the stale write fails silently instead of surfacing as an error.
+    const stillExists = await Entry.exists({ _id: id, userId: session.userId });
+    if (stillExists) return NextResponse.json(await Entry.findById(id).then(serialize));
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
   return NextResponse.json(serialize(entry));
 }
 

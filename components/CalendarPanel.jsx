@@ -372,12 +372,30 @@ function CalendarTaskBlock({ entry, task, project, users, layout, onUpdate, onRe
           <span className="cal-task-assignee-inline" title={`Assigned to ${assigneeLabel}`}> · 👤 {assigneeLabel}</span>
         )}
       </div>
-      {!isTiny && (
-        <div className="cal-task-time">
-          {formatHour(entry.startHour)} – {formatHour(entry.endHour)}
-          <span className="cal-task-dur"> · {formatDuration(entry.startHour, entry.endHour)}</span>
-        </div>
-      )}
+      {(() => {
+        const hasLogged = entry.status === 'done' && entry.actualStartHour != null && entry.actualEndHour != null;
+        if (isTiny) return null;
+        if (isSmall) {
+          // Only room for one detail line — prefer the logged time once resolved
+          return hasLogged ? (
+            <div className="cal-task-time">✓ Logged {formatDuration(entry.actualStartHour, entry.actualEndHour)}</div>
+          ) : (
+            <div className="cal-task-time">
+              {formatHour(entry.startHour)} – {formatHour(entry.endHour)}
+              <span className="cal-task-dur"> · {formatDuration(entry.startHour, entry.endHour)}</span>
+            </div>
+          );
+        }
+        return <>
+          <div className="cal-task-time">
+            {formatHour(entry.startHour)} – {formatHour(entry.endHour)}
+            <span className="cal-task-dur"> · {formatDuration(entry.startHour, entry.endHour)}</span>
+          </div>
+          {hasLogged && (
+            <div className="cal-task-logged">✓ Logged {formatDuration(entry.actualStartHour, entry.actualEndHour)}</div>
+          )}
+        </>;
+      })()}
       {assignees.length > 0 && !isSmall && (
         <div className="cal-task-assignee" title={`Assigned to ${assigneeLabel}`}>👤 {assigneeLabel}</div>
       )}

@@ -66,6 +66,7 @@ body{background:var(--bg);color:var(--text)}
 .cal-task-title{font-size:12px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.35;text-shadow:0 1px 2px rgba(0,0,0,.2)}
 .cal-task-time{font-size:10px;color:rgba(255,255,255,.7);margin-top:3px;display:flex;align-items:center;gap:4px}
 .cal-task-dur{color:rgba(255,255,255,.45);font-size:9px}
+.cal-task-logged{font-size:10px;font-weight:600;color:rgba(255,255,255,.9);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-task-assignee{font-size:10px;color:rgba(255,255,255,.7);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-task-assignee-inline{font-weight:500;color:rgba(255,255,255,.75)}
 .cal-task-remove{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.28);border:none;color:rgba(255,255,255,.8);width:20px;height:20px;border-radius:50%;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .12s;padding:0}

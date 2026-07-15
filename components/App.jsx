@@ -85,17 +85,24 @@ export default function App() {
         !en.status
       );
       if (!expired.length) return;
-      expired.forEach(en => {
+      // Apply whatever the server actually did, not what we assumed locally —
+      // the server rejects this specific transition if the entry was already
+      // resolved (done/failed) elsewhere in the meantime, e.g. by a stale
+      // background tab. Blindly setting 'pending' here would just re-create
+      // the bug client-side even with the server-side guard in place.
+      Promise.all(expired.map(en =>
         fetch(`/api/entries/${en.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'pending' }),
-        });
+        }).then(r => r.ok ? r.json() : null).catch(() => null)
+      )).then(results => {
+        dataVersion.current++;
+        setEntries(prev => prev.map(en => {
+          const updated = results.find(r => r && r.id === en.id);
+          return updated || en;
+        }));
       });
-      dataVersion.current++;
-      setEntries(prev => prev.map(en =>
-        expired.find(e => e.id === en.id) ? { ...en, status: 'pending' } : en
-      ));
     };
     check();
     const iv = setInterval(check, 30000);
