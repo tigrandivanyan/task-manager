@@ -305,9 +305,17 @@ function TaskDetailModal({ entry, task, project, users, onClose, onUpdateTask })
 /* ── Calendar task block ───────────────────────────────────── */
 function CalendarTaskBlock({ entry, task, project, users, layout, onUpdate, onRemove, onShowDetail }) {
   const moveRef    = useRef({ moved: false, startX: 0, startY: 0 });
+  const previewRef = useRef(null);
+  // Local-only position while dragging/resizing — the network write happens
+  // once, on release, via `onUpdate`. Firing it on every mousemove instead
+  // (as this used to) sends dozens of concurrent PUTs per gesture with no
+  // ordering guarantee, so whichever happened to reach the server last would
+  // win — not necessarily the position you actually dropped it at.
+  const [preview, setPreview] = useState(null);
+  const displayEntry = preview || entry;
   const color      = project?.color || '#8b5cf6';
-  const top        = (entry.startHour - DAY_START) * HOUR_HEIGHT;
-  const height     = Math.max((entry.endHour - entry.startHour) * HOUR_HEIGHT, 20);
+  const top        = (displayEntry.startHour - DAY_START) * HOUR_HEIGHT;
+  const height     = Math.max((displayEntry.endHour - displayEntry.startHour) * HOUR_HEIGHT, 20);
   const isSmall    = height < 52;
   const isTiny     = height < 28;
   const assignees  = (task?.assigneeIds || []).map(id => users?.find(u => u.id === id)).filter(Boolean);
@@ -332,13 +340,21 @@ function CalendarTaskBlock({ entry, task, project, users, layout, onUpdate, onRe
       if (!moveRef.current.moved || isResolved) return;
       const delta    = (ev.clientY - moveRef.current.startY) / HOUR_HEIGHT;
       const newStart = Math.min(DAY_END - dur, Math.max(DAY_START, startHour + Math.round(delta * 4) / 4));
-      onUpdate({ ...entry, startHour: newStart, endHour: newStart + dur });
+      const next = { ...entry, startHour: newStart, endHour: newStart + dur };
+      previewRef.current = next;
+      setPreview(next);
     };
 
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (!moveRef.current.moved) onShowDetail(entry.id);
+      if (!moveRef.current.moved) {
+        onShowDetail(entry.id);
+      } else if (previewRef.current) {
+        onUpdate(previewRef.current);
+      }
+      previewRef.current = null;
+      setPreview(null);
     };
 
     document.addEventListener('mousemove', onMove);
@@ -353,9 +369,17 @@ function CalendarTaskBlock({ entry, task, project, users, layout, onUpdate, onRe
     const onMove   = ev => {
       const delta  = (ev.clientY - startY) / HOUR_HEIGHT;
       const newEnd = Math.min(DAY_END, Math.max(entry.startHour + 0.25, startEnd + Math.round(delta * 4) / 4));
-      onUpdate({ ...entry, endHour: newEnd });
+      const next = { ...entry, endHour: newEnd };
+      previewRef.current = next;
+      setPreview(next);
     };
-    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (previewRef.current) onUpdate(previewRef.current);
+      previewRef.current = null;
+      setPreview(null);
+    };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   };
@@ -381,15 +405,15 @@ function CalendarTaskBlock({ entry, task, project, users, layout, onUpdate, onRe
             <div className="cal-task-time">✓ Logged {formatDuration(entry.actualStartHour, entry.actualEndHour)}</div>
           ) : (
             <div className="cal-task-time">
-              {formatHour(entry.startHour)} – {formatHour(entry.endHour)}
-              <span className="cal-task-dur"> · {formatDuration(entry.startHour, entry.endHour)}</span>
+              {formatHour(displayEntry.startHour)} – {formatHour(displayEntry.endHour)}
+              <span className="cal-task-dur"> · {formatDuration(displayEntry.startHour, displayEntry.endHour)}</span>
             </div>
           );
         }
         return <>
           <div className="cal-task-time">
-            {formatHour(entry.startHour)} – {formatHour(entry.endHour)}
-            <span className="cal-task-dur"> · {formatDuration(entry.startHour, entry.endHour)}</span>
+            {formatHour(displayEntry.startHour)} – {formatHour(displayEntry.endHour)}
+            <span className="cal-task-dur"> · {formatDuration(displayEntry.startHour, displayEntry.endHour)}</span>
           </div>
           {hasLogged && (
             <div className="cal-task-logged">✓ Logged {formatDuration(entry.actualStartHour, entry.actualEndHour)}</div>
